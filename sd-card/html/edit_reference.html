@@ -5,76 +5,87 @@
     <title>Reference Image</title>
 
     <style>
-        h1 {font-size: 1.8em;}
-        h2 {font-size: 1.5em; margin-block-start: 0.0em; margin-block-end: 0.2em;}
-        h3 {font-size: 1.2em;}
-        p {font-size: 1em;}
+        :root { --ink: #1C2430; --muted: #4B5563; --line: #E2E5EA; --ground: #F3F4F6; --accent: #1D5FD1; --accent-ink: #164AA3; --accent-soft: #EAF1FD; }
+        body, html { font-size: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        body.refpage { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); background: var(--ground);
+            margin: 0; padding: 0 12px 24px; max-width: 1180px; }
+        .refpage h2 { font-size: 22px; margin: 14px 0 2px; }
+        .refpage .sub { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
 
-        body, html {
-            font-size: 100%;
-            -webkit-text-size-adjust: 100%;
-            text-size-adjust: 100%;
+        .savebar { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+            background: var(--ground); padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .savebar .status { font-size: 13px; font-weight: 600; border-radius: 999px; padding: 6px 12px; background: #E5E7EB; color: var(--ink); }
+        .savebar .status.dirty { background: #FFF1DC; color: #8A4B00; }
+        .savebar .spacer { flex: 1 1 auto; }
+
+        .rbtn { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #C9CED6; background: #FFFFFF; color: var(--ink);
+            font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; width: auto; }
+        .rbtn:disabled { opacity: 0.45; cursor: default; }
+        .rbtn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+        .rbtn.outline { border-color: var(--accent); color: var(--accent-ink); }
+        .rbtn[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+        .rbtn svg { flex: none; }
+
+        .seg { display: inline-flex; background: #E5E7EB; border-radius: 8px; padding: 3px; gap: 2px; }
+        .seg button { height: 34px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 13px;
+            font-weight: 500; color: var(--muted); cursor: pointer; }
+        .seg button[aria-pressed="true"] { background: #FFFFFF; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.15); opacity: 1; cursor: default; }
+        .seg button:disabled:not([aria-pressed="true"]) { opacity: 0.45; cursor: default; }
+
+        .layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; margin-top: 12px; }
+        .card { background: #FFFFFF; border: 1px solid var(--line); border-radius: 12px; }
+        .imagecard { flex: 999 1 520px; min-width: 0; overflow: hidden; }
+        .cardhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+        .imagearea { background: #F4F5F7; display: flex; justify-content: center; align-items: center; min-height: 240px; }
+        .imagearea canvas { display: block; width: 100%; max-width: 760px; height: auto; }
+        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+        #drawhint { font-size: 13px; color: var(--muted); }
+        #drawhint.hinton { color: var(--accent-ink); font-weight: 700; }
+
+        .steps { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+        .step { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+        .step h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; }
+        .step h3 .num { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #FFFFFF; font-size: 12px;
+            display: inline-flex; align-items: center; justify-content: center; }
+        .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+        .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .tunebox { background: #F4F7FD; border-radius: 10px; padding: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .tnote { font-size: 12px; color: var(--muted); flex-basis: 100%; margin: 0; }
+        .locked-note { font-size: 13px; color: var(--muted); background: #F4F5F7; border-radius: 8px; padding: 8px 10px; margin: 0; }
+
+        .param { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .param > form { order: 2; display: flex; align-items: center; gap: 8px; margin: 0; }
+        .param > .plabel { order: 1; border-collapse: collapse; width: auto !important; margin: 0 !important; border: 0 !important; }
+        .param > .plabel { align-self: flex-start; }
+        .param > .plabel td:first-child { width: 22px; }
+        .param > .plabel td { text-align: left !important; border: 0 !important; background: none !important; padding: 0 6px 0 0 !important; height: auto; font-size: 13px; font-weight: 600; color: #374151; vertical-align: middle; }
+        .param form input[type=range] { float: none !important; width: auto !important; flex: 1 1 auto; margin: 0 !important; order: 2; accent-color: var(--accent); min-width: 0; }
+        .param form output { float: none !important; order: 1; min-width: 44px; padding: 0 !important; text-align: left !important; font-variant-numeric: tabular-nums; }
+        .param form input[type=number] { width: 90px; height: 34px; box-sizing: border-box; border: 1px solid #C9CED6; border-radius: 8px; padding: 0 8px; font-size: 14px; margin: 0; }
+        .param form select { min-width: 0; width: 100%; max-width: 100%; height: 34px; border: 1px solid #C9CED6; border-radius: 8px; padding: 0 6px; font-size: 14px; margin: 0; background: #FFFFFF; }
+        .param.disabled, .param[disabled] { opacity: 0.55; }
+        .param.fullwidth { grid-column: 1 / -1; }
+        details.more summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #374151; padding: 4px 0; }
+        details.more[open] summary { margin-bottom: 8px; }
+
+        input:out-of-range, input:invalid { background-color: rgba(255, 0, 0, 0.25); border: 1px solid red; }
+
+        details#desc_details { font-size: 14px; margin: 4px 0 0; }
+        details#desc_details p { font-size: 14px; }
+
+        .tooltip .tooltiptext { min-width: 310px !important; max-width: 310px !important; margin-left: -40px !important; }
+
+        /* Phone: one column, actions fixed at the bottom within thumb reach */
+        @media (max-width: 760px) {
+            body.refpage { padding-bottom: 96px; }
+            .savebar { position: fixed; top: auto; bottom: 0; left: 0; right: 0; padding: 10px 12px 14px; background: #FFFFFF;
+                border-top: 1px solid var(--line); border-bottom: 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
+            .savebar .status { flex-basis: 100%; text-align: center; }
+            .savebar .spacer { display: none; }
+            .savebar .rbtn { flex: 1 1 0; justify-content: center; height: 46px; }
+            .grid2 { grid-template-columns: minmax(0, 1fr); }
+            .tooltip .tooltiptext { margin-left: -10px !important; min-width: 260px !important; max-width: 260px !important; }
         }
-
-        input[type=number] {
-            width: 60px;
-            margin-right: 10px;
-            padding: 3px 5px;
-            display: inline-block;
-            border: 1px solid #ccc;
-            font-size: 16px;
-            vertical-align: middle;
-        }
-
-        select {
-			min-width: 140px;
-			max-width: 140%;
-			padding: 3px 5px;
-			display: inline-block;
-			border: 1px solid #ccc;
-			font-size: 1em;
-			margin-right: 10px;
-			vertical-align: middle;
-		}
-
-		input:out-of-range {
-			background-color: rgba(255, 0, 0, 0.25);
-			border: 1px solid red;
-        }
-
-		input:invalid {
-			background-color: rgba(255, 0, 0, 0.25);
-			border: 1px solid red;
-        }
-
-        .button {
-            padding: 5px 10px;
-            width: 205px;
-            font-size: 16px;
-        }
-
-        th, td {
-            padding: 5px 5px 5px 0px;
-            height: 28px;
-        }
-
-        .table {
-            width: 660px;
-            padding: 5px 5px 5px 0px;
-            table-layout: fixed;
-        }
-
-        details {
-            text-align: justify;
-            font-size: 16px;
-            margin-right: 10px;
-        }
-
-        .tooltip .tooltiptext {
-			min-width: 310px !important;
-			max-width: 310px !important;
-			margin-left: -40px !important;
-		}
     </style>
 
     <link rel="stylesheet" href="param_tooltip.css?v=$COMMIT_HASH">
@@ -86,8 +97,17 @@
     <script src="firework.js?v=$COMMIT_HASH"></script>
 </head>
 
-<body style="font-family: arial; padding: 0px 10px; width:660px; max-width:660px;">
+<body class="refpage">
     <h2>Reference Image</h2>
+    <p class="sub">Align the image, mark the digits, tune the camera. Nothing is stored until Save And Apply.</p>
+
+    <div class="savebar">
+        <span id="changestatus" class="status">Saved settings</span>
+        <span class="spacer"></span>
+        <button class="rbtn" type="button" id="discard" onclick="discardChanges()" disabled>Discard</button>
+        <button class="rbtn primary" type="button" id="savereference" onclick="SaveReference()" disabled>Save And Apply</button>
+    </div>
+
     <details id="desc_details">
         <summary><b>CLICK HERE</b> for usage description
         </summary>
@@ -97,8 +117,8 @@
         </p>
         <p>
             If you start with the setup from scratch no reference image is available and only a textual info is shown. Otherwise the actual
-            saved reference image is shown. Use the button <b>"Create New Reference"</b> to start creating your own reference image. After
-            selecting the button a new image will be taken using all configured parameter. With the button <b>"Update Image"</b>
+            saved reference image is shown. Use <b>"New image"</b> above the image to start creating your own reference image. After
+            selecting the button a new image will be taken using all configured parameter. With the button <b>"Take new image"</b>
             the image can be refreshed (still all parameter get applied to the new image).
         </p>
         <p>
@@ -107,60 +127,61 @@
             before the alignment algorithm is processed to compensate only small misalignments of rotation or shift.
         </p>
         <p>
-            Setup helpers (added in this modified version), step by step:<br>
-            1. <b>"Draw Line"</b> (next to 'Image Rotation'): click where the first digit starts, then where the last digit ends. The image is rotated so the digits
-            are horizontal; the click order sets the reading direction. <b>"180°"</b> (next to it) turns the image upside down if needed.<br>
-            2. <b>"Draw Box"</b> (below the Auto-Tune button): click two opposite corners of a box tightly around the digits.<br>
-            3. Choose the <b>Action</b>; the button above the box button is named after it and only a click on it changes anything:<br>
-            - <b>None</b>: no action, the box is only a guide (button greyed out).<br>
-            - <b>Auto-tune image</b> ("Auto-Tune Image"): takes several test images and keeps the flash intensity, brightness and contrast
-            that make the whole image most readable. No box needed.<br>
-            - <b>Auto-tune box</b> ("Auto-Tune Box"): the same, but only the box is scored.<br>
-            - <b>Auto zoom box</b> ("Zoom To Box"): sets the zoom factor and offsets so the box fills the image and takes a new image.<br>
-            - <b>Auto-tune and zoom box</b> ("Zoom + Auto-Tune"): first the zoom, then Auto-tune on the zoomed box.<br>
-            For the zoom actions, draw the box around everything that has to be read (digits and dials): anything outside is cut off.
+            Setup helpers (added in this modified version):<br>
+            1. <b>Align</b>: use <b>Draw line</b> under the image: click where the first digit starts, then where the last digit ends. The
+            image is rotated so the digits are horizontal; the click order sets the reading direction. <b>Rotate 180°</b> turns it upside
+            down if needed.<br>
+            2. <b>Draw box</b> under the image: click two opposite corners. <b>Zoom to box</b> sets zoom factor and offsets so the box fills
+            the image (draw the box around everything that has to be read, digits and dials: anything outside is cut off).
+            <b>Reset zoom</b> goes back to 1.00x.<br>
+            3. <b>Auto-tune</b> takes 7 test images and keeps the flash intensity, brightness and contrast that make the <b>Box</b> (or the
+            <b>Whole image</b>) most readable.<br>
+            <b>Discard</b> goes back to the last saved settings and reference image. Nothing is stored before <b>Save And Apply</b>.
         </p>
         <p>
             After setting up your reference image don't forget to save the new configuration  with the button <b>"Save And Apply"</b>.
             The new configuration gets automatically applied. No reboot is required.
         </p>
     </details>
-    <hr>
 
-	<table class="table">
-        <colgroup>
-            <col span="1" style="width: 33.3%;">
-            <col span="1" style="width: 33.3%;">
-            <col span="1" style="width: 33.3%;">
-        </colgroup>
-        <tr>
-            <td>
-                <input class="button" type="button" value="Show Actual Reference" onclick="showReference()">
-            </td>
-            <td>
-                <input class="button" type="button" id="createreference" value="Create New Reference" onclick="loadRawImage()">
-            </td>
-            <td></td>
-        </tr>
-    </table>
+    <div class="layout">
+        <div class="card imagecard">
+            <div class="cardhead">
+                <div class="seg" role="group" aria-label="Image shown">
+                    <button type="button" id="createreference" aria-pressed="false" onclick="loadRawImage()">New image</button>
+                    <button type="button" id="showsaved" aria-pressed="true" onclick="discardChanges()">Saved reference</button>
+                </div>
+                <button class="rbtn" type="button" id="take" onclick="doTake(true)" disabled><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>Take new image</button>
+            </div>
+            <div class="imagearea">
+                <img id="img_loading" hidden>
+                <canvas id="canvas" hidden></canvas>
+            </div>
+            <div class="toolbar">
+                <button class="rbtn" type="button" id="drawline" aria-pressed="false" onclick="startDrawLine()" disabled><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg><span>Draw line</span></button>
+                <button class="rbtn" type="button" id="drawbox" aria-pressed="false" onclick="startDrawBox()" disabled><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1" stroke-dasharray="3 2"/></svg><span>Draw box</span></button>
+                <button class="rbtn" type="button" id="rotate180" onclick="rotate180()" disabled><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>Rotate 180°</button>
+                <span id="drawhint"></span>
+            </div>
+        </div>
 
-    <table class="table">
-        <colgroup>
-            <col span="1" style="width: 5%;">
-            <col span="1" style="width: 20%;">
-            <col span="1" style="width: 26%;">
-            <col span="1" style="width: 5%;">
-            <col span="1" style="width: 20%;">
-            <col span="1" style="width: 23%;">
-        </colgroup>
+        <div class="steps">
+            <p class="locked-note" id="lockednote">Showing the saved reference. Click <b>New image</b> to take a new image and change settings.</p>
 
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomfactor</td>
-            <td>
-                <span>Zoom Factor</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_zoomfactor_form">
+            <section class="card step">
+                <h3><span class="num">1</span>Align</h3>
+                <div class="grid2">
+<div class="param camParameter">
+<form id="imagealignment_imagerotation_form" style="display: inline-block; white-space: nowrap;">
+					<input required type="number" min="-180.0" max="180.0" step="0.1" value="0.0"
+						name="imagealignment.imagerotation" id="imagealignment_imagerotation_value"
+						onchange="(!validity.rangeUnderflow||(value=-180.0)) && (!validity.rangeOverflow||(value=180.0)) &&
+							(!validity.stepMismatch||(value=this.value));drawRotated();gatherChangedParameter(this.form)">°
+				</form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_imagealignment_imagerotation</td><td>Image rotation</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_zoomfactor_form">
                     <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:18px"
                             type="range" min="1000" max="4000" value="1000"
                             name="takeimage.camera.zoomfactor" id="takeimage_camera_zoomfactor_value"
@@ -168,167 +189,71 @@
                             this.nextElementSibling.value = (this.value / 1000.0).toFixed(2) + 'x';gatherChangedParameter(this.form, true)">
                     <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">1.00x</output>
                 </form>
-            </td>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_brightness</td>
-            <td>
-                <span>Brightness</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_brightness_form">
-                    <input class="classvisibility_init" style="clear: both; width: 80%;vertical-align:middle"
-                            type="range" min="-2" max="2" value="0"
-                            name="takeimage.camera.brightness" id="takeimage_camera_brightness_value"
-                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
-                    <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
-                </form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomoffsetx</td>
-            <td>
-                <span>Zoom Offset X</span>
-            </td>
-            <td class="camParameter classvisibility_takeimage_zoomfactor">
-                <form id="takeimage_camera_zoomoffsetx_form">
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomfactor</td><td>Zoom factor</td></tr></table>
+</div>
+                </div>
+                <div class="row">
+                    <button class="rbtn outline" type="button" id="zoombox" onclick="zoomBoxAction()" disabled>Zoom to box</button>
+                    <button class="rbtn" type="button" id="resetzoom" onclick="resetZoom()" disabled>Reset zoom</button>
+                </div>
+                <details class="more"><summary>Zoom offsets</summary>
+                <div class="grid2">
+<div class="param camParameter classvisibility_takeimage_zoomfactor">
+<form id="takeimage_camera_zoomoffsetx_form">
                     <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:18px"
                             type="range" min="-960" max="960" value="0"
                             name="takeimage.camera.zoomoffsetx" id="takeimage_camera_zoomoffsetx_value"
                             onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
                     <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
                 </form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_contrast</td>
-            <td>
-                <span>Contrast</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_contrast_form">
-                    <input class="classvisibility_init"  style="clear:both;width:80%;vertical-align:middle"
-                            type="range" min="-2" max="2" value="0"
-                            name="takeimage.camera.contrast" id="takeimage_camera_contrast_value"
-                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
-                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left">0</output>
-                </form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomoffsety</td>
-            <td>
-                <span>Zoom Offset Y</span>
-            </td>
-            <td class="camParameter classvisibility_takeimage_zoomfactor">
-                <form id="takeimage_camera_zoomoffsety_form">
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomoffsetx</td><td>Zoom offset X</td></tr></table>
+</div>
+<div class="param camParameter classvisibility_takeimage_zoomfactor">
+<form id="takeimage_camera_zoomoffsety_form">
                     <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:18px"
                     type="range" min="-720" max="720" value="0"
                     name="takeimage.camera.zoomoffsety" id="takeimage_camera_zoomoffsety_value"
                     onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
             <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
                 </form>
-            </td>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_zoomoffsety</td><td>Zoom offset Y</td></tr></table>
+</div>
+                </div>
+                </details>
+            </section>
 
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_saturation</td>
-            <td>
-                <span>Saturation</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_saturation_form">
-                    <input class="classvisibility_init" style="clear:both;width:80%;vertical-align:middle"
-                            type="range" min="-2" max="2" value="0"
-                            name="takeimage.camera.saturation" id="takeimage_camera_saturation_value"
-                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
-                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left">0</output>
-                </form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_mirrorimage</td>
-            <td>
-                <span>Mirror Image</span>
-            </td>
-            <td class="camParameter">
-				<form id="takeimage_camera_mirrorimage_form">
-					<select name="takeimage.camera.mirrorimage" id="takeimage_camera_mirrorimage_value"
-							onchange="gatherChangedParameter(this.form)">
-						<option value="false" selected>Disabled</option>
-						<option value="true">Enabled</option>
-					</select>
+            <section class="card step">
+                <h3><span class="num">2</span>Light and exposure</h3>
+                <div class="tunebox">
+                    <button class="rbtn primary" type="button" id="autotune" onclick="autoTune()" disabled>Auto-tune</button>
+                    <div class="seg" role="group" aria-label="Area Auto-tune scores">
+                        <button type="button" id="area_box" aria-pressed="true" onclick="setTuneArea('box')">Box</button>
+                        <button type="button" id="area_image" aria-pressed="false" onclick="setTuneArea('image')">Whole image</button>
+                    </div>
+                    <p class="tnote">Takes 7 test images and keeps the flash intensity, brightness and contrast that make the box (or whole image) most readable.</p>
+                </div>
+                <div class="grid2">
+<div class="param camParameter">
+<form id="takeimage_flashlight_flashintensity_form">
+					<input required type="number" min="0" max="100" value="50"
+						name="takeimage.flashlight.flashintensity" id="takeimage_flashlight_flashintensity_value"
+						onchange="(!validity.rangeUnderflow||(value=0)) && (!validity.rangeOverflow||(value=100));
+							gatherChangedParameter(this.form, true)">%
 				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_sharpness</td>
-            <td>
-                <span>Sharpness</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_sharpness_form">
-                    <input class="classvisibility_init" style="clear:both;width:80%;vertical-align:middle"
-                            type="range" min="-3" max="3" value="0"
-                            name="takeimage.camera.sharpness" id="takeimage_camera_sharpness_value"
-                            onchange="this.nextElementSibling.value = this.value;gatherChangedParameter(this.form, true)">
-                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left"
-                            id="takeimage_camera_sharpness_value_output">0</output>
-                </form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_flipimage</td>
-            <td>
-                <span>Flip Image</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_flipimage_form">
-					<select name="takeimage.camera.flipimage" id="takeimage_camera_flipimage_value"
-							onchange="gatherChangedParameter(this.form)">
-						<option value="false" selected>Disabled</option>
-						<option value="true">Enabled</option>
-					</select>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_flashlight_flashintensity</td><td>Flash intensity</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_flashlight_flashtime_form">
+					<input required type="number" min="100" step="100" value="2000"
+						name="takeimage.flashlight.flashtime" id="takeimage_flashlight_flashtime_value"
+						onchange="(!validity.rangeUnderflow||(value=100)) && (!validity.stepMismatch||(value=parseInt(this.value)));
+                            gatherChangedParameter(this.form, true)"
+						oninput="">ms
 				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_specialeffect</td>
-            <td>
-                <span>Special Effect</span>
-            </td>
-            <td class="camParameter">
-				<form id="takeimage_camera_specialeffect_form">
-					<select name="takeimage.camera.specialeffect" id="takeimage_camera_specialeffect_value"
-							onchange="gatherChangedParameter(this.form, true)">
-						<option value="0" selected>None</option>
-						<option value="1">Negative</option>
-						<option value="2">Grayscale</option>
-						<option value="7">Gray+Negative</option>
-					</select>
-				</form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_gaincontrolmode</td>
-            <td>
-                <span>Gain Control</span>
-            </td>
-            <td class="camParameter">
-				<form id="takeimage_camera_gaincontrolmode_form">
-					<select class="classvisibility_init" name="takeimage.camera.gaincontrolmode" id="takeimage_camera_gaincontrolmode_value"
-							onchange='setClassEnabled("classvisibility_takeimage_gaincontrolmode_manual", this.value == 0);
-										gatherChangedParameter(this.form, true)'>
-						<option value="0">Manual</option>
-						<option value="1" selected>Auto</option>
-					</select>
-				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_exposurecontrolmode</td>
-            <td>
-                <span>Exposure Control</span>
-            </td>
-            <td class="camParameter">
-                <form id="takeimage_camera_exposurecontrolmode_form">
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_flashlight_flashtime</td><td>Flash time</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_exposurecontrolmode_form">
 					<select class="classvisibility_init"
 							name="takeimage.camera.exposurecontrolmode" id="takeimage_camera_exposurecontrolmode_value"
 							onchange='setClassEnabled("classvisibility_takeimage_exposurecontrolmode_auto", this.value > 0);
@@ -339,145 +264,136 @@
 						<option value="2">Auto (AEC2)</option>
 					</select>
 				</form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_manualgainvalue</td>
-            <td style="padding:0px 5px 0px 0px">
-                <span>Manual Gain Value</span>
-            </td>
-            <td class="camParameter classvisibility_takeimage_gaincontrolmode_manual">
-				<form id="takeimage_camera_manualgainvalue_form">
-                    <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:18px"
-                            type="range" min="0" max="30" value="0"
-                            name="takeimage.camera.manualgainvalue" id="takeimage_camera_manualgainvalue_value"
-                            onchange="this.nextElementSibling.value = this.value;gatherChangedParameter(this.form, true)">
-                    <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
-				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_autoexposurelevel</td>
-            <td style="padding:0px 5px 0px 0px">
-                <span>Auto Exposure Level</span>
-            </td>
-            <td class="camParameter classvisibility_takeimage_exposurecontrolmode_auto">
-                <form id="takeimage_camera_autoexposurelevel_form">
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_exposurecontrolmode</td><td>Exposure control</td></tr></table>
+</div>
+<div class="param camParameter classvisibility_takeimage_exposurecontrolmode_auto">
+<form id="takeimage_camera_autoexposurelevel_form">
                     <input class="classvisibility_init" style="clear:both;width:80%;vertical-align:middle"
                             type="range" min="-2" max="2" value="0"
                             name="takeimage.camera.autoexposurelevel" id="takeimage_camera_autoexposurelevel_value"
                             onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
                     <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left">0</output>
                 </form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_flashlight_flashtime</td>
-            <td>
-                <span>Flash Time</span>
-            </td>
-            <td class="camParameter">
-				<form id="takeimage_flashlight_flashtime_form">
-					<input required type="number" min="100" step="100" value="2000"
-						name="takeimage.flashlight.flashtime" id="takeimage_flashlight_flashtime_value"
-						onchange="(!validity.rangeUnderflow||(value=100)) && (!validity.stepMismatch||(value=parseInt(this.value)));
-                            gatherChangedParameter(this.form, true)"
-						oninput="">ms
-				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_takeimage_camera_manualexposurevalue</td>
-            <td style="padding:0px 5px 0px 0px">
-                <span>Manual Exposure Value</span>
-            </td>
-            <td class="camParameter classvisibility_takeimage_exposurecontrolmode_manual">
-				<form id="takeimage_camera_manualexposurevalue_form">
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_autoexposurelevel</td><td>Auto exposure level</td></tr></table>
+</div>
+<div class="param camParameter classvisibility_takeimage_exposurecontrolmode_manual">
+<form id="takeimage_camera_manualexposurevalue_form">
                     <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:8px"
                             type="range" min="0" max="1920" value="0"
                             name="takeimage.camera.manualexposurevalue" id="takeimage_camera_manualexposurevalue_value"
                             onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
                     <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">300</output>
 				</form>
-            </td>
-        </tr>
-
-        <tr>
-            <td style="visibility:hidden">$TOOLTIP_takeimage_flashlight_flashintensity</td>
-            <td>
-                <span>Flash Intensity</span>
-            </td>
-            <td class="camParameter">
-				<form id="takeimage_flashlight_flashintensity_form">
-					<input required type="number" min="0" max="100" value="50"
-						name="takeimage.flashlight.flashintensity" id="takeimage_flashlight_flashintensity_value"
-						onchange="(!validity.rangeUnderflow||(value=0)) && (!validity.rangeOverflow||(value=100));
-							gatherChangedParameter(this.form, true)">%
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_manualexposurevalue</td><td>Manual exposure value</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_gaincontrolmode_form">
+					<select class="classvisibility_init" name="takeimage.camera.gaincontrolmode" id="takeimage_camera_gaincontrolmode_value"
+							onchange='setClassEnabled("classvisibility_takeimage_gaincontrolmode_manual", this.value == 0);
+										gatherChangedParameter(this.form, true)'>
+						<option value="0">Manual</option>
+						<option value="1" selected>Auto</option>
+					</select>
 				</form>
-            </td>
-
-            <td style="visibility:hidden">$TOOLTIP_imagealignment_imagerotation</td>
-            <td>
-                <span>Image Rotation</span>
-            </td>
-            <td class="camParameter" style="white-space: nowrap;">
-				<form id="imagealignment_imagerotation_form" style="display: inline-block; white-space: nowrap;">
-					<input required type="number" min="-180.0" max="180.0" step="0.1" value="0.0"
-						name="imagealignment.imagerotation" id="imagealignment_imagerotation_value"
-						onchange="(!validity.rangeUnderflow||(value=-180.0)) && (!validity.rangeOverflow||(value=180.0)) &&
-							(!validity.stepMismatch||(value=this.value));drawRotated();gatherChangedParameter(this.form)">°
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_gaincontrolmode</td><td>Gain control</td></tr></table>
+</div>
+<div class="param camParameter classvisibility_takeimage_gaincontrolmode_manual">
+<form id="takeimage_camera_manualgainvalue_form">
+                    <input class="classvisibility_init" style="clear:both; width:60%;vertical-align:middle;float:right;margin-right:18px"
+                            type="range" min="0" max="30" value="0"
+                            name="takeimage.camera.manualgainvalue" id="takeimage_camera_manualgainvalue_value"
+                            onchange="this.nextElementSibling.value = this.value;gatherChangedParameter(this.form, true)">
+                    <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
 				</form>
-				<span style="display: inline-block; white-space: nowrap;">
-					<input class="button" style="width: auto; padding: 0 8px;" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
-					<input class="button" style="width: auto; padding: 0 8px;" type="button" id="rotate180" value="180°" title="Rotate 180°" onclick="rotate180()" disabled>
-				</span>
-            </td>
-        </tr>
-    </table>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_manualgainvalue</td><td>Manual gain value</td></tr></table>
+</div>
+                </div>
+            </section>
 
-    <table class="table">
-        <colgroup>
-            <col span="1" style="width: 33.3%;">
-            <col span="1" style="width: 33.3%;">
-            <col span="1" style="width: 33.3%;">
-        </colgroup>
-        <tr>
-            <td colspan="3">
-                <b>Reference Image</b>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <input class="button" type="button" id="autotune" value="Auto-Tune Image" onclick="autoTune()" disabled>
-            </td>
-            <td>
-                <input class="button" type="button" id="take" onclick="doTake(true)" value="Update Image">
-            <td>
-                <input style="font-weight:bold;" class="button" type="button" id="savereference"
-                        value="Save And Apply" onclick="SaveReference()">
-            </td>
-        </tr>
-        <tr>
-            <td colspan="3">
-                <input class="button" type="button" id="drawbox" value="Draw Box" onclick="startDrawBox()" disabled>
-                Action:
-                <select id="boxuse" onchange="boxUseChanged()">
-                    <option value="none">None</option>
-                    <option value="tuneimage">Auto-tune image</option>
-                    <option value="tunebox" selected>Auto-tune box</option>
-                    <option value="zoombox">Auto zoom box</option>
-                    <option value="tunezoombox">Auto-tune and zoom box</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td colspan="3">
-                <div id="drawhint" style="min-height: 1.5em; font-weight: bold"></div>
-                <img id="img_loading" hidden>
-                <canvas style="max-width: 100%" id="canvas" hidden></canvas>
-            </td>
-        </tr>
-    </table>
+            <section class="card step">
+                <h3><span class="num">3</span>Picture fine-tune</h3>
+                <div class="grid2">
+<div class="param camParameter">
+<form id="takeimage_camera_brightness_form">
+                    <input class="classvisibility_init" style="clear: both; width: 80%;vertical-align:middle"
+                            type="range" min="-2" max="2" value="0"
+                            name="takeimage.camera.brightness" id="takeimage_camera_brightness_value"
+                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
+                    <output style="vertical-align:middle;min-width:15px; padding-right:5px;text-align:right;float:left">0</output>
+                </form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_brightness</td><td>Brightness</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_contrast_form">
+                    <input class="classvisibility_init"  style="clear:both;width:80%;vertical-align:middle"
+                            type="range" min="-2" max="2" value="0"
+                            name="takeimage.camera.contrast" id="takeimage_camera_contrast_value"
+                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
+                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left">0</output>
+                </form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_contrast</td><td>Contrast</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_saturation_form">
+                    <input class="classvisibility_init" style="clear:both;width:80%;vertical-align:middle"
+                            type="range" min="-2" max="2" value="0"
+                            name="takeimage.camera.saturation" id="takeimage_camera_saturation_value"
+                            onchange="this.nextElementSibling.value = this.value; gatherChangedParameter(this.form, true)">
+                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left">0</output>
+                </form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_saturation</td><td>Saturation</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_sharpness_form">
+                    <input class="classvisibility_init" style="clear:both;width:80%;vertical-align:middle"
+                            type="range" min="-3" max="3" value="0"
+                            name="takeimage.camera.sharpness" id="takeimage_camera_sharpness_value"
+                            onchange="this.nextElementSibling.value = this.value;gatherChangedParameter(this.form, true)">
+                    <output style="vertical-align:middle;min-width:15px;padding-right:5px;text-align:right;float:left"
+                            id="takeimage_camera_sharpness_value_output">0</output>
+                </form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_sharpness</td><td>Sharpness</td></tr></table>
+</div>
+                </div>
+                <details class="more"><summary>Advanced: mirror, flip, special effect</summary>
+                <div class="grid2">
+<div class="param camParameter">
+<form id="takeimage_camera_mirrorimage_form">
+					<select name="takeimage.camera.mirrorimage" id="takeimage_camera_mirrorimage_value"
+							onchange="gatherChangedParameter(this.form)">
+						<option value="false" selected>Disabled</option>
+						<option value="true">Enabled</option>
+					</select>
+				</form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_mirrorimage</td><td>Mirror image</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_flipimage_form">
+					<select name="takeimage.camera.flipimage" id="takeimage_camera_flipimage_value"
+							onchange="gatherChangedParameter(this.form)">
+						<option value="false" selected>Disabled</option>
+						<option value="true">Enabled</option>
+					</select>
+				</form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_flipimage</td><td>Flip image</td></tr></table>
+</div>
+<div class="param camParameter">
+<form id="takeimage_camera_specialeffect_form">
+					<select name="takeimage.camera.specialeffect" id="takeimage_camera_specialeffect_value"
+							onchange="gatherChangedParameter(this.form, true)">
+						<option value="0" selected>None</option>
+						<option value="1">Negative</option>
+						<option value="2">Grayscale</option>
+						<option value="7">Gray+Negative</option>
+					</select>
+				</form>
+<table class="plabel"><tr><td style="visibility:hidden">$TOOLTIP_takeimage_camera_specialeffect</td><td>Special effect</td></tr></table>
+</div>
+                </div>
+                </details>
+            </section>
+        </div>
+    </div>
 
 
 <script src="global_common.js?v=$COMMIT_HASH"></script>
@@ -558,6 +474,7 @@
         let url = "";
 
         // Until the new image is decoded, the old one must not be analysed or saved
+        justSaved = false;
         setAnalysisEnabled(false);
         document.getElementById("savereference").disabled = true;
 
@@ -698,7 +615,7 @@
         cancelDrawBox();
         lineMode = true;
         lineStart = null;
-        document.getElementById("drawline").value = "Cancel Line";
+        setToolLabel("drawline", "Cancel line", true);
         setDrawHint("Draw Line: click where the first digit starts (Esc to cancel)");
     }
 
@@ -706,7 +623,18 @@
     // Shown above the image: a notification would cover the image where the user has to click
     function setDrawHint(text)
     {
-        document.getElementById("drawhint").textContent = text;
+        let hint = document.getElementById("drawhint");
+        hint.textContent = text;
+        hint.classList.toggle("hinton", text != "");
+    }
+
+
+    // Tool buttons show their mode: pressed while drawing, label says how to cancel
+    function setToolLabel(id, text, pressed)
+    {
+        let button = document.getElementById(id);
+        button.querySelector("span").textContent = text;
+        button.setAttribute("aria-pressed", pressed ? "true" : "false");
     }
 
 
@@ -721,7 +649,7 @@
         cancelDrawLine();
         boxMode = true;
         boxStart = null;
-        document.getElementById("drawbox").value = "Cancel Box";
+        setToolLabel("drawbox", "Cancel box", true);
         setDrawHint("Draw Box: click the first corner of a box around the digits (Esc to cancel)");
     }
 
@@ -731,7 +659,7 @@
         if (boxMode) setDrawHint("");
         boxMode = false;
         boxStart = null;
-        document.getElementById("drawbox").value = "Draw Box";
+        setToolLabel("drawbox", "Draw box", false);
     }
 
 
@@ -753,7 +681,7 @@
         if (lineMode) setDrawHint("");
         lineMode = false;
         lineStart = null;
-        document.getElementById("drawline").value = "Draw Line";
+        setToolLabel("drawline", "Draw line", false);
     }
 
 
@@ -840,9 +768,9 @@
     function setAnalysisEnabled(enabled)
     {
         analysisEnabled = enabled;
-        document.getElementById("rotate180").disabled = !enabled;
-        document.getElementById("drawline").disabled = !enabled;
-        document.getElementById("drawbox").disabled = !enabled;
+        if (typeof updateStatus === "function") updateStatus();
+        let off = !enabled || autoTuneRunning;
+        ["rotate180", "drawline", "drawbox", "zoombox", "resetzoom"].forEach((id) => document.getElementById(id).disabled = off);
         updateTuneButton();
         if (!enabled) {
             cancelDrawLine();
@@ -909,47 +837,136 @@
     }
 
 
-    // The choice is a page setting, not part of the meter config: remembered in this browser only
-    function restoreBoxUse()
+    // Page setting, not part of the meter config: remembered in this browser only
+    let tuneArea = "box";
+    let justSaved = false; // Shown image and settings were just saved
+
+    function restoreTuneArea()
     {
+        let area = "box";
         try {
-            let saved = localStorage.getItem("referenceBoxUse");
-            let renamed = { none: "tuneimage", tune: "tunebox", tunezoom: "tunezoombox" }; // Earlier test versions
-            if (localStorage.getItem("referenceBoxUseVersion") != "2" && renamed[saved])
-                saved = renamed[saved];
-            if (saved && document.querySelector('#boxuse option[value="' + saved + '"]'))
-                document.getElementById("boxuse").value = saved;
+            let saved = localStorage.getItem("referenceTuneArea");
+            if (saved == "box" || saved == "image")
+                area = saved;
+            else if (localStorage.getItem("referenceBoxUse") == "tuneimage") // Earlier test version
+                area = "image";
         }
         catch (error) {} // Storage blocked: keep the default
-
-        updateTuneButton();
+        setTuneArea(area, false);
     }
 
 
-    function boxUseChanged()
+    function setTuneArea(area, remember = true)
     {
-        try {
-            localStorage.setItem("referenceBoxUse", document.getElementById("boxuse").value);
-            localStorage.setItem("referenceBoxUseVersion", "2");
+        tuneArea = area;
+        document.getElementById("area_box").setAttribute("aria-pressed", area == "box" ? "true" : "false");
+        document.getElementById("area_image").setAttribute("aria-pressed", area == "image" ? "true" : "false");
+        if (remember) {
+            try {
+                localStorage.setItem("referenceTuneArea", area);
+            }
+            catch (error) {}
         }
-        catch (error) {}
-
-        updateTuneButton();
-
-        let use = document.getElementById("boxuse").value;
-        if (use == "zoombox" || use == "tunezoombox")
-            firework.launch('Zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
     }
 
 
-    // The button says what a click will do; greyed out for "None"
     function updateTuneButton()
     {
-        let labels = { none: "No Action", tuneimage: "Auto-Tune Image", tunebox: "Auto-Tune Box", zoombox: "Zoom To Box", tunezoombox: "Zoom + Auto-Tune" };
-        let use = document.getElementById("boxuse").value;
-        let button = document.getElementById("autotune");
-        button.value = labels[use] || "Auto-Tune Box";
-        button.disabled = !analysisEnabled || autoTuneRunning || use == "none";
+        document.getElementById("autotune").disabled = !analysisEnabled || autoTuneRunning;
+    }
+
+
+    function countChanges(obj)
+    {
+        let n = 0;
+        for (let key in obj)
+            n += (obj[key] !== null && typeof obj[key] === "object") ? countChanges(obj[key]) : 1;
+        return n;
+    }
+
+
+    // Save bar, view switch and the note on the settings follow the page state
+    function updateStatus()
+    {
+        let status = document.getElementById("changestatus");
+        let text = "Saved settings", dirty = false;
+
+        if (autoTuneRunning) {
+            text = "Auto-tune running…";
+            dirty = true;
+        }
+        else if (!isActReference) {
+            let n = countChanges(typeof jsonConfigModifiedDelta !== "undefined" ? jsonConfigModifiedDelta : {});
+            if (justSaved && n == 0) {
+                text = "Saved";
+            }
+            else {
+                justSaved = false;
+                text = "Not saved: new image" + (n > 0 ? " · " + n + " changed setting" + (n > 1 ? "s" : "") : "");
+                dirty = true;
+            }
+        }
+
+        if (status.textContent != text)
+            status.textContent = text;
+        status.classList.toggle("dirty", dirty);
+
+        document.getElementById("createreference").setAttribute("aria-pressed", isActReference ? "false" : "true");
+        document.getElementById("showsaved").setAttribute("aria-pressed", isActReference ? "true" : "false");
+        document.getElementById("showsaved").disabled = isActReference || autoTuneRunning;
+        document.getElementById("discard").disabled = isActReference || autoTuneRunning || (justSaved && !dirty);
+        document.getElementById("lockednote").hidden = !isActReference;
+    }
+
+
+    // Back to the last saved settings and reference image (nothing on the meter changes)
+    function discardChanges()
+    {
+        if (autoTuneRunning || isActReference)
+            return;
+        if (!confirm("Discard all changes and go back to the last saved settings and reference image?"))
+            return;
+        cancelDrawLine();
+        cancelDrawBox();
+        showReference();
+    }
+
+
+    function zoomBoxAction()
+    {
+        if (!digitBox) {
+            firework.launch('Please use "Draw box" first: around everything that has to be read (digits and dials)', 'warning', 8000);
+            return;
+        }
+        if (!sameZoom(digitBoxZoom, getZoom())) {
+            firework.launch('The zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
+            return;
+        }
+        if (digitBoxZoomed) {
+            firework.launch('Already zoomed to this box. Draw a new box to zoom again', 'warning', 8000);
+            return;
+        }
+        zoomToBox(false);
+    }
+
+
+    async function resetZoom()
+    {
+        if (document.getElementById("takeimage_camera_zoomfactor_value").value == 1000 &&
+            getZoom().x == 0 && getZoom().y == 0) {
+            firework.launch('Zoom is already 1.00x', 'success', 4000);
+            return;
+        }
+        applyZoom({ factor: 1000, x: 0, y: 0 });
+        digitBox = null; // The box no longer fits the image
+        digitBoxZoomed = false;
+        try {
+            await takeImageAndWait(true);
+            firework.launch('Zoom reset to 1.00x', 'success', 5000);
+        }
+        catch (error) {
+            console.error("Reset zoom image failed: " + error);
+        }
     }
 
 
@@ -1087,15 +1104,11 @@
     // Runs the chosen action. Camera settings apply to every later measurement; only the box (or the whole image) is scored
     async function autoTune()
     {
-        let use = document.getElementById("boxuse").value;
-        let usesBox = (use == "tunebox" || use == "zoombox" || use == "tunezoombox");
-        let zooms = (use == "zoombox" || use == "tunezoombox");
-
-        if (use == "none")
-            return;
+        let use = (tuneArea == "image") ? "tuneimage" : "tunebox";
+        let usesBox = (use == "tunebox");
 
         if (usesBox && !digitBox) {
-            firework.launch('Please use "Draw Box" first', 'warning', 8000);
+            firework.launch('Please use "Draw box" around the digits first, or switch Auto-tune to "Whole image"', 'warning', 8000);
             return;
         }
 
@@ -1103,18 +1116,6 @@
             firework.launch('The zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
             return;
         }
-
-        if (use == "zoombox") {
-            if (digitBoxZoomed)
-                firework.launch('Already zoomed to this box. Draw a new box to zoom again', 'warning', 8000);
-            else
-                await zoomToBox(false);
-            return;
-        }
-
-        // Zoom first (once per box), then tune the zoomed image
-        if (use == "tunezoombox" && !digitBoxZoomed && !(await zoomToBox(true)))
-            return;
 
         let start = {
             intensity: Number(document.getElementById("takeimage_flashlight_flashintensity_value").value),
@@ -1126,14 +1127,16 @@
         let bestScore = -2;
 
         autoTuneRunning = true;
+        updateStatus();
         lockCameraInputs(true);
+        setAnalysisEnabled(false);
         document.getElementById("createreference").disabled = true;
         document.getElementById("autotune").disabled = true;
         document.getElementById("savereference").disabled = true;
         document.getElementById("take").disabled = true;
 
         try {
-            let zoomNote = zooms ? ', zoom ' + (getZoom().factor / 1000).toFixed(2) + 'x' : '';
+            let zoomNote = (getZoom().factor > 1000) ? ', zoom ' + (getZoom().factor / 1000).toFixed(2) + 'x' : '';
 
             let found = (use == "tuneimage") ?
                 { band: { cx: imageObj.width / 2, cy: imageObj.height / 2, length: imageObj.width * 0.9, width: imageObj.height * 0.45 }, axis: 0 } :
@@ -1166,7 +1169,7 @@
             lockCameraInputs(false);
             document.getElementById("savereference").disabled = false;
             document.getElementById("take").disabled = false;
-            updateTuneButton();
+            setAnalysisEnabled(true);
             firework.launch('Auto-tune' + zoomNote + ': flash ' + best.intensity + '%, brightness ' + best.brightness + ', contrast ' + best.contrast + '. Save to keep it', 'success', 8000);
         }
         catch (error) {
@@ -1364,6 +1367,9 @@
 
             firework.launch('Save and apply configuration...', 'success', 2000, true);
 			saveConfig(JSON.stringify(jsonConfigModifiedDelta)).then(() => {
+				jsonConfigModifiedDelta = {}; // All stored now
+				justSaved = true;
+				updateStatus();
 				setTimeout(function() {
 					reloadConfig();
 				}, 500);
@@ -1382,6 +1388,7 @@
         let url = getDomainname() + "/fileserver/config/reference.jpg?" + Math.floor((Math.random() * 1000000) + 1);
         loadCanvas(url, false);
         isActReference = true;
+        updateStatus();
 
         document.getElementById("savereference").disabled = true;
         document.getElementById("createreference").disabled = false;
@@ -1421,7 +1428,9 @@
         openDescription();
 
         canvas.addEventListener("click", canvasClick, false);
-        restoreBoxUse();
+        restoreTuneArea();
+        updateStatus();
+        setInterval(updateStatus, 300);
         document.addEventListener("keydown", function(e) {
             if (e.key == "Escape") {
                 cancelDrawLine();
