@@ -900,8 +900,25 @@
     }
 
 
+    // The choice is a page setting, not part of the meter config: remembered in this browser only
+    function restoreBoxUse()
+    {
+        try {
+            let saved = localStorage.getItem("referenceBoxUse");
+            if (saved && document.querySelector('#boxuse option[value="' + saved + '"]'))
+                document.getElementById("boxuse").value = saved;
+        }
+        catch (error) {} // Storage blocked: keep the default
+    }
+
+
     function boxUseChanged()
     {
+        try {
+            localStorage.setItem("referenceBoxUse", document.getElementById("boxuse").value);
+        }
+        catch (error) {}
+
         if (document.getElementById("boxuse").value == "tunezoom")
             firework.launch('Auto-tune and zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
     }
@@ -1340,6 +1357,7 @@
         openDescription();
 
         canvas.addEventListener("click", canvasClick, false);
+        restoreBoxUse();
         document.addEventListener("keydown", function(e) {
             if (e.key == "Escape") {
                 cancelDrawLine();
