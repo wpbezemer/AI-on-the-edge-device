@@ -112,9 +112,9 @@
             are horizontal; the click order sets the reading direction. <b>"180°"</b> (next to it) turns the image upside down if needed.<br>
             2. <b>"Draw Box"</b> (below 'Auto-Tune Image'): click two opposite corners of a box tightly around the digits.<br>
             'Use box for' sets what the box is used for. <b>None</b>: the box is only a guide, Auto-tune scores the whole image.
-            <b>Auto-tune</b>: Auto-tune scores only the box. <b>Auto-tune and zoom</b>: right after drawing the box, the zoom factor and
-            offsets are set so the box fills the image and a new image is taken; draw this box around everything that has to be read (digits and dials).<br>
-            3. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
+            <b>Auto-tune</b>: Auto-tune scores only the box. <b>Auto-tune and zoom</b>: the button becomes <b>"Zoom + Auto-Tune"</b>; a click
+            first sets the zoom factor and offsets so the box fills the image, then Auto-tune runs; draw this box around everything that has to be read (digits and dials).<br>
+            3. <b>"Auto-Tune Image"</b> / <b>"Auto-Tune Box"</b> / <b>"Zoom + Auto-Tune"</b> (the name follows 'Use box for'): takes several test images and keeps the flash intensity, brightness and contrast that make the
             box content most readable.
         </p>
         <p>
@@ -789,9 +789,6 @@
             }
 
             drawRotated(true);
-
-            if (digitBox && document.getElementById("boxuse").value == "tunezoom")
-                zoomToBox();
             return;
         }
 
@@ -914,6 +911,8 @@
                 document.getElementById("boxuse").value = saved;
         }
         catch (error) {} // Storage blocked: keep the default
+
+        updateTuneButton();
     }
 
 
@@ -924,12 +923,18 @@
         }
         catch (error) {}
 
-        if (document.getElementById("boxuse").value == "tunezoom") {
-            if (digitBox && !digitBoxZoomed && !isActReference)
-                zoomToBox();
-            else
-                firework.launch('Auto-tune and zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
-        }
+        updateTuneButton();
+
+        if (document.getElementById("boxuse").value == "tunezoom")
+            firework.launch('Zoom + Auto-Tune: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
+    }
+
+
+    // The button says what a click will do
+    function updateTuneButton()
+    {
+        let labels = { none: "Auto-Tune Image", tune: "Auto-Tune Box", tunezoom: "Zoom + Auto-Tune" };
+        document.getElementById("autotune").value = labels[document.getElementById("boxuse").value] || "Auto-Tune Image";
     }
 
 
@@ -962,9 +967,9 @@
         }
 
         if (newZoom.factor <= 1050)
-            firework.launch('Zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x: the box covers (almost) the whole image, so there is hardly anything to zoom', 'warning', 10000);
+            firework.launch('Zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x: the box covers (almost) the whole image, so there is hardly anything to zoom. Auto-tune follows', 'warning', 10000);
         else
-            firework.launch('Zoom set to ' + (newZoom.factor / 1000).toFixed(2) + 'x so the box fills the image. Save And Apply to keep it', 'success', 8000);
+            firework.launch('Zoom set to ' + (newZoom.factor / 1000).toFixed(2) + 'x so the box fills the image. Auto-tune follows', 'success', 8000);
         return true;
     }
 
@@ -1078,7 +1083,7 @@
             return;
         }
 
-        // Normally already done when the box was drawn
+        // Zoom first (once per box), then tune the zoomed image
         if (use == "tunezoom" && !digitBoxZoomed && !(await zoomToBox()))
             return;
 
