@@ -110,12 +110,15 @@
             Setup helpers (added in this modified version), step by step:<br>
             1. <b>"Draw Line"</b> (next to 'Image Rotation'): click where the first digit starts, then where the last digit ends. The image is rotated so the digits
             are horizontal; the click order sets the reading direction. <b>"180°"</b> (next to it) turns the image upside down if needed.<br>
-            2. <b>"Draw Box"</b> (below 'Auto-Tune Image'): click two opposite corners of a box tightly around the digits.<br>
-            'Use box for' sets what the box is used for. <b>None</b>: the box is only a guide, Auto-tune scores the whole image.
-            <b>Auto-tune</b>: Auto-tune scores only the box. <b>Auto-tune and zoom</b>: the button becomes <b>"Zoom + Auto-Tune"</b>; a click
-            first sets the zoom factor and offsets so the box fills the image, then Auto-tune runs; draw this box around everything that has to be read (digits and dials).<br>
-            3. <b>"Auto-Tune Image"</b> / <b>"Auto-Tune Box"</b> / <b>"Zoom + Auto-Tune"</b> (the name follows 'Use box for'): takes several test images and keeps the flash intensity, brightness and contrast that make the
-            box content most readable.
+            2. <b>"Draw Box"</b> (below the Auto-Tune button): click two opposite corners of a box tightly around the digits.<br>
+            3. Choose the <b>Action</b>; the button above the box button is named after it and only a click on it changes anything:<br>
+            - <b>None</b>: no action, the box is only a guide (button greyed out).<br>
+            - <b>Auto-tune image</b> ("Auto-Tune Image"): takes several test images and keeps the flash intensity, brightness and contrast
+            that make the whole image most readable. No box needed.<br>
+            - <b>Auto-tune box</b> ("Auto-Tune Box"): the same, but only the box is scored.<br>
+            - <b>Auto zoom box</b> ("Zoom To Box"): sets the zoom factor and offsets so the box fills the image and takes a new image.<br>
+            - <b>Auto-tune and zoom box</b> ("Zoom + Auto-Tune"): first the zoom, then Auto-tune on the zoomed box.<br>
+            For the zoom actions, draw the box around everything that has to be read (digits and dials): anything outside is cut off.
         </p>
         <p>
             After setting up your reference image don't forget to save the new configuration  with the button <b>"Save And Apply"</b>.
@@ -457,11 +460,13 @@
         <tr>
             <td colspan="3">
                 <input class="button" type="button" id="drawbox" value="Draw Box" onclick="startDrawBox()" disabled>
-                Use box for:
+                Action:
                 <select id="boxuse" onchange="boxUseChanged()">
                     <option value="none">None</option>
-                    <option value="tune" selected>Auto-tune</option>
-                    <option value="tunezoom">Auto-tune and zoom</option>
+                    <option value="tuneimage">Auto-tune image</option>
+                    <option value="tunebox" selected>Auto-tune box</option>
+                    <option value="zoombox">Auto zoom box</option>
+                    <option value="tunezoombox">Auto-tune and zoom box</option>
                 </select>
             </td>
         </tr>
@@ -492,7 +497,8 @@
     let boxStart = null;
     let digitBox = null; // {x0, y0, x1, y1} on the image as shown
     let digitBoxZoom = null; // Zoom settings of the image the box was drawn on
-    let digitBoxZoomed = false; // "Auto-tune and zoom": zoom already set for this box
+    let digitBoxZoomed = false; // Zoom already set for this box
+    let analysisEnabled = false; // A captured image is shown and may be analysed
 
 
     function setVariableInputLimits()
@@ -833,10 +839,11 @@
 
     function setAnalysisEnabled(enabled)
     {
+        analysisEnabled = enabled;
         document.getElementById("rotate180").disabled = !enabled;
         document.getElementById("drawline").disabled = !enabled;
         document.getElementById("drawbox").disabled = !enabled;
-        document.getElementById("autotune").disabled = !enabled || autoTuneRunning;
+        updateTuneButton();
         if (!enabled) {
             cancelDrawLine();
             cancelDrawBox();
@@ -907,6 +914,9 @@
     {
         try {
             let saved = localStorage.getItem("referenceBoxUse");
+            let renamed = { none: "tuneimage", tune: "tunebox", tunezoom: "tunezoombox" }; // Earlier test versions
+            if (localStorage.getItem("referenceBoxUseVersion") != "2" && renamed[saved])
+                saved = renamed[saved];
             if (saved && document.querySelector('#boxuse option[value="' + saved + '"]'))
                 document.getElementById("boxuse").value = saved;
         }
@@ -920,26 +930,31 @@
     {
         try {
             localStorage.setItem("referenceBoxUse", document.getElementById("boxuse").value);
+            localStorage.setItem("referenceBoxUseVersion", "2");
         }
         catch (error) {}
 
         updateTuneButton();
 
-        if (document.getElementById("boxuse").value == "tunezoom")
-            firework.launch('Zoom + Auto-Tune: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
+        let use = document.getElementById("boxuse").value;
+        if (use == "zoombox" || use == "tunezoombox")
+            firework.launch('Zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
     }
 
 
-    // The button says what a click will do
+    // The button says what a click will do; greyed out for "None"
     function updateTuneButton()
     {
-        let labels = { none: "Auto-Tune Image", tune: "Auto-Tune Box", tunezoom: "Zoom + Auto-Tune" };
-        document.getElementById("autotune").value = labels[document.getElementById("boxuse").value] || "Auto-Tune Image";
+        let labels = { none: "No Action", tuneimage: "Auto-Tune Image", tunebox: "Auto-Tune Box", zoombox: "Zoom To Box", tunezoombox: "Zoom + Auto-Tune" };
+        let use = document.getElementById("boxuse").value;
+        let button = document.getElementById("autotune");
+        button.value = labels[use] || "Auto-Tune Box";
+        button.disabled = !analysisEnabled || autoTuneRunning || use == "none";
     }
 
 
-    // "Auto-tune and zoom": set zoom factor and offsets so the box fills the image, then take a new image
-    async function zoomToBox()
+    // Set zoom factor and offsets so the box fills the image, then take a new image
+    async function zoomToBox(tuneFollows)
     {
         if (document.getElementById("takeimage_camera_mirrorimage_value").value == "true" ||
             document.getElementById("takeimage_camera_flipimage_value").value == "true") {
@@ -966,10 +981,11 @@
             return false;
         }
 
+        let next = tuneFollows ? ' Auto-tune follows' : ' Save And Apply to keep it';
         if (newZoom.factor <= 1050)
-            firework.launch('Zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x: the box covers (almost) the whole image, so there is hardly anything to zoom. Auto-tune follows', 'warning', 10000);
+            firework.launch('Zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x: the box covers (almost) the whole image, so there is hardly anything to zoom.' + next, 'warning', 10000);
         else
-            firework.launch('Zoom set to ' + (newZoom.factor / 1000).toFixed(2) + 'x so the box fills the image. Auto-tune follows', 'success', 8000);
+            firework.launch('Zoom set to ' + (newZoom.factor / 1000).toFixed(2) + 'x so the box fills the image.' + next, 'success', 8000);
         return true;
     }
 
@@ -1068,23 +1084,36 @@
     }
 
 
-    // Camera settings apply to every later measurement; only the box (or with "None" the whole image) is scored
+    // Runs the chosen action. Camera settings apply to every later measurement; only the box (or the whole image) is scored
     async function autoTune()
     {
         let use = document.getElementById("boxuse").value;
+        let usesBox = (use == "tunebox" || use == "zoombox" || use == "tunezoombox");
+        let zooms = (use == "zoombox" || use == "tunezoombox");
 
-        if (use != "none" && !digitBox) {
-            firework.launch('Auto-tune: please use "Draw Box" first', 'warning', 8000);
+        if (use == "none")
+            return;
+
+        if (usesBox && !digitBox) {
+            firework.launch('Please use "Draw Box" first', 'warning', 8000);
             return;
         }
 
-        if (use != "none" && !sameZoom(digitBoxZoom, getZoom())) {
-            firework.launch('Auto-tune: the zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
+        if (usesBox && !sameZoom(digitBoxZoom, getZoom())) {
+            firework.launch('The zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
+            return;
+        }
+
+        if (use == "zoombox") {
+            if (digitBoxZoomed)
+                firework.launch('Already zoomed to this box. Draw a new box to zoom again', 'warning', 8000);
+            else
+                await zoomToBox(false);
             return;
         }
 
         // Zoom first (once per box), then tune the zoomed image
-        if (use == "tunezoom" && !digitBoxZoomed && !(await zoomToBox()))
+        if (use == "tunezoombox" && !digitBoxZoomed && !(await zoomToBox(true)))
             return;
 
         let start = {
@@ -1104,9 +1133,9 @@
         document.getElementById("take").disabled = true;
 
         try {
-            let zoomNote = (use == "tunezoom") ? ', zoom ' + (getZoom().factor / 1000).toFixed(2) + 'x' : '';
+            let zoomNote = zooms ? ', zoom ' + (getZoom().factor / 1000).toFixed(2) + 'x' : '';
 
-            let found = (use == "none") ?
+            let found = (use == "tuneimage") ?
                 { band: { cx: imageObj.width / 2, cy: imageObj.height / 2, length: imageObj.width * 0.9, width: imageObj.height * 0.45 }, axis: 0 } :
                 boxToRawRegion(digitBox);
 
@@ -1137,7 +1166,7 @@
             lockCameraInputs(false);
             document.getElementById("savereference").disabled = false;
             document.getElementById("take").disabled = false;
-            document.getElementById("autotune").disabled = false;
+            updateTuneButton();
             firework.launch('Auto-tune' + zoomNote + ': flash ' + best.intensity + '%, brightness ' + best.brightness + ', contrast ' + best.contrast + '. Save to keep it', 'success', 8000);
         }
         catch (error) {
