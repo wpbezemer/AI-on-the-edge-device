@@ -466,8 +466,8 @@
     let context = canvas.getContext('2d');
     let imageObj = new Image();
     let isActReference = false;
-    let onImageLoaded = null;
-    let onCaptureFailed = null;
+    let imageWaiter = null; // { resolve, reject } of the capture that Auto-tune waits for
+    let lockedCameraInputs = [];
     let autoTuneRunning = false;
     let lineMode = false;
     let lineStart = null;
@@ -529,8 +529,9 @@
     {
         let url = "";
 
-        if (release_save)
-            document.getElementById("savereference").disabled = false;
+        // Until the new image is decoded, the old one must not be analysed or saved
+        setAnalysisEnabled(false);
+        document.getElementById("savereference").disabled = true;
 
         let flashtime = document.getElementById("takeimage_flashlight_flashtime_value").value;
         if (flashtime == "") flashtime = "2000";
@@ -582,12 +583,8 @@
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4) {
                 if (this.status >= 200 && this.status < 300) {
-                    loadCanvas(window.URL.createObjectURL(xhttp.response), true, true);
+                    loadCanvas(window.URL.createObjectURL(xhttp.response), true, true, release_save);
                     isActReference = false;
-                    document.getElementById("autolevel").disabled = false;
-                    document.getElementById("rotate180").disabled = false;
-                    document.getElementById("drawline").disabled = false;
-                    document.getElementById("autotune").disabled = autoTuneRunning;
                 }
                 else if (this.status == 403) {
                     document.getElementById("createreference").disabled = false;
@@ -595,14 +592,14 @@
                                         Repeat action or check logs.", 'warning', 5000);
                     console.error("Setting image parameter rejected. Process not (yet) initialized. \
                                         Response status: " + this.status);
-                    if (onCaptureFailed) onCaptureFailed();
+                    if (imageWaiter) imageWaiter.reject(new Error("Capture failed"));
                 }
                 else {
                     document.getElementById("createreference").disabled = false;
                     firework.launch("Setting image parameter failed (Response status: " + this.status +
                                     "). Repeat action or check logs.", 'danger', 30000);
                     console.error("Setting image parameter failed. Response status: " + this.status);
-                    if (onCaptureFailed) onCaptureFailed();
+                    if (imageWaiter) imageWaiter.reject(new Error("Capture failed"));
                 }
             }
         };
@@ -754,8 +751,35 @@
     function setCameraValue(id, value)
     {
         let el = document.getElementById(id);
+        let wasDisabled = el.disabled;
+        el.disabled = false; // A disabled field is not marked as changed
         el.value = value;
         el.dispatchEvent(new Event("change")); // Update output and mark parameter as changed
+        el.disabled = wasDisabled;
+    }
+
+
+    function setAnalysisEnabled(enabled)
+    {
+        document.getElementById("autolevel").disabled = !enabled;
+        document.getElementById("rotate180").disabled = !enabled;
+        document.getElementById("drawline").disabled = !enabled;
+        document.getElementById("autotune").disabled = !enabled || autoTuneRunning;
+        if (!enabled) cancelDrawLine();
+    }
+
+
+    // Auto-tune scores a fixed image region, so other camera settings (zoom, ...) must not change meanwhile
+    function lockCameraInputs(lock)
+    {
+        if (lock) {
+            lockedCameraInputs = [...document.querySelectorAll(".camParameter input, .camParameter select")].filter((el) => !el.disabled);
+            lockedCameraInputs.forEach((el) => el.disabled = true);
+        }
+        else {
+            lockedCameraInputs.forEach((el) => el.disabled = false);
+            lockedCameraInputs = [];
+        }
     }
 
 
@@ -767,26 +791,17 @@
     }
 
 
+    // Only the image of this capture resolves the wait, also failures end it at once
     function takeImageAndWait(release_save = false)
     {
         return new Promise(function(resolve, reject) {
             let timer = setTimeout(function() {
-                onImageLoaded = null;
-                onCaptureFailed = null;
-                reject(new Error("Timeout"));
+                imageWaiter.reject(new Error("Timeout"));
             }, 45000);
 
-            onImageLoaded = function() {
-                clearTimeout(timer);
-                onCaptureFailed = null;
-                resolve();
-            };
-
-            onCaptureFailed = function() {
-                clearTimeout(timer);
-                onImageLoaded = null;
-                onCaptureFailed = null;
-                reject(new Error("Capture failed"));
+            imageWaiter = {
+                resolve: function() { clearTimeout(timer); imageWaiter = null; resolve(); },
+                reject: function(error) { clearTimeout(timer); imageWaiter = null; reject(error); }
             };
 
             doTake(release_save);
@@ -821,6 +836,8 @@
         let bestScore = -2;
 
         autoTuneRunning = true;
+        lockCameraInputs(true);
+        document.getElementById("createreference").disabled = true;
         document.getElementById("autotune").disabled = true;
         document.getElementById("savereference").disabled = true;
         document.getElementById("take").disabled = true;
@@ -847,13 +864,19 @@
             }
 
             setTuneValues(best);
-            autoTuneRunning = false; // Final image: release Save and Update again
-            await takeImageAndWait(true);
+            await takeImageAndWait(); // Controls stay locked until this final image is shown
+
+            autoTuneRunning = false;
+            lockCameraInputs(false);
+            document.getElementById("savereference").disabled = false;
+            document.getElementById("take").disabled = false;
+            document.getElementById("autotune").disabled = false;
             firework.launch('Auto-tune: flash ' + best.intensity + '%, brightness ' + best.brightness + ', contrast ' + best.contrast + '. Save to keep it', 'success', 8000);
         }
         catch (error) {
             console.error("Auto-tune stopped: " + error);
             autoTuneRunning = false;
+            lockCameraInputs(false);
             showReference(); // Back to the saved settings
             firework.launch('Auto-tune stopped, settings restored. Please create a new reference', 'danger', 8000);
         }
@@ -938,7 +961,8 @@
     }
 
 
-    function loadCanvas(dataURL, grid, autolevel = false)
+    // fromCapture: image of a capture (not the saved reference), may be analysed and awaited
+    function loadCanvas(dataURL, grid, fromCapture = false, release_save = false)
     {
         $("#canvas").hide();
         $("#img_loading").show();
@@ -960,18 +984,25 @@
             $("#img_loading").hide();
             $("#canvas").show();
 
+            if (!fromCapture)
+                return;
+
+            setAnalysisEnabled(true);
+            if (release_save && !autoTuneRunning)
+                document.getElementById("savereference").disabled = false;
+
             // Only when no rotation is set yet: never overwrite a manual correction or "Rotate 180°"
-            if (autolevel && !autoTuneRunning && getRotation() == 0)
+            if (!autoTuneRunning && getRotation() == 0)
                 autoLevel();
 
-            if (onImageLoaded) {
-                let callback = onImageLoaded;
-                onImageLoaded = null;
-                callback();
-            }
+            if (imageWaiter)
+                imageWaiter.resolve();
         };
 
         imageObj.onerror = function() {
+            if (fromCapture && imageWaiter)
+                imageWaiter.reject(new Error("Image could not be decoded"));
+
             context.clearRect(0, 0, canvas.width, canvas.height);
             context.textBaseline = "top";
             context.textAlign = "left";
