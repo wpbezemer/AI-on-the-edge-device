@@ -111,9 +111,7 @@
             1. <b>"Draw Line"</b>: click where the first digit starts, then where the last digit ends. The image is rotated so the digits
             are horizontal; the click order sets the reading direction. <b>"Rotate 180°"</b> turns the image upside down if needed.<br>
             2. <b>"Draw Box"</b>: click two opposite corners of a box tightly around the digits.<br>
-            3. <b>"Auto-level"</b>: fine-tunes the rotation within 5° so the edges in the box are exactly horizontal. Without a box it
-            tries to find the digit band itself; this works only for some meter types.<br>
-            4. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
+            3. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
             box content most readable.
         </p>
         <p>
@@ -448,7 +446,6 @@
             <td colspan="3">
                 Rotation:
                 <input class="button" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
-                <input class="button" type="button" id="autolevel" value="Auto-level" onclick="autoLevel()" disabled>
                 <input class="button" type="button" id="rotate180" value="Rotate 180°" onclick="rotate180()" disabled>
             </td>
         </tr>
@@ -471,7 +468,7 @@
 
 <script src="global_common.js?v=$COMMIT_HASH"></script>
 <script src="global_data.js?v=$COMMIT_HASH"></script>
-<script src="auto_level.js?v=$COMMIT_HASH"></script>
+<script src="auto_tune.js?v=$COMMIT_HASH"></script>
 <script>
     let canvas = document.getElementById('canvas');
     let context = canvas.getContext('2d');
@@ -657,54 +654,6 @@
     }
 
 
-    // silent: automatic run after a capture, only acts when the digit band is found by itself
-    function autoLevel(silent = false)
-    {
-        try {
-            let raw = getRawImageData();
-
-            // With a box: fine-tune the current rotation, works for any meter type
-            if (digitBox && !silent) {
-                let result = AutoLevel.refineRotation(raw, getRotation(), digitBox, 5);
-                if (result == null) {
-                    firework.launch('Auto-level: box too small, please draw it again', 'warning', 8000);
-                }
-                else if (result.atEdge) {
-                    firework.launch('Auto-level: no clear angle within 5° of the current rotation. Rotation not changed, please use "Draw Line" again', 'warning', 10000);
-                }
-                else if (result.strength < 2) {
-                    setRotation(result.angle);
-                    firework.launch('Auto-level: rotation set to ' + getRotation().toFixed(1) + '°, but the result is uncertain. Please check it; a box tightly around the digits gives the best result', 'warning', 10000);
-                }
-                else {
-                    setRotation(result.angle);
-                    firework.launch('Auto-level: rotation fine-tuned to ' + getRotation().toFixed(1) + '°', 'success', 5000);
-                }
-                return;
-            }
-
-            // Without a box: find the digit band (only some meter layouts)
-            let found = AutoLevel.detectMeterRotation(raw);
-            if (found != null) {
-                setRotation(found.angle);
-                if (silent)
-                    return;
-                if (found.upright == "red-dials")
-                    firework.launch('Auto-level: rotation set to ' + found.angle + '°', 'success', 5000);
-                else
-                    firework.launch('Auto-level: rotation set to ' + found.angle + '°. Use "Rotate 180°" if the digits are upside down', 'warning', 8000);
-                return;
-            }
-        }
-        catch (error) {
-            console.error("Auto-level failed: " + error);
-        }
-
-        if (!silent)
-            firework.launch('Auto-level could not find the digits. Use "Draw Line" first, then "Draw Box" around the digits and "Auto-level" again', 'warning', 10000);
-    }
-
-
     function rotate180()
     {
         setRotation(getRotation() + 180);
@@ -870,7 +819,6 @@
 
     function setAnalysisEnabled(enabled)
     {
-        document.getElementById("autolevel").disabled = !enabled;
         document.getElementById("rotate180").disabled = !enabled;
         document.getElementById("drawline").disabled = !enabled;
         document.getElementById("drawbox").disabled = !enabled;
@@ -940,22 +888,15 @@
     }
 
 
-    // Camera settings apply to every later measurement; only the box (or the digit band found) is scored
+    // Camera settings apply to every later measurement; only the box is scored
     async function autoTune()
     {
-        let found = null;
-
-        try {
-            found = digitBox ? boxToRawRegion(digitBox) : AutoLevel.detectMeterRotation(getRawImageData());
-        }
-        catch (error) {
-            console.error("Auto-tune failed: " + error);
-        }
-
-        if (found == null) {
+        if (!digitBox) {
             firework.launch('Auto-tune: please use "Draw Box" around the digits first', 'warning', 8000);
             return;
         }
+
+        let found = boxToRawRegion(digitBox);
 
         let start = {
             intensity: Number(document.getElementById("takeimage_flashlight_flashintensity_value").value),
@@ -984,7 +925,7 @@
                     setTuneValues(variant);
                     await takeImageAndWait();
 
-                    let score = AutoLevel.scoreReadability(getRawImageData(), found.band, found.axis);
+                    let score = AutoTune.scoreReadability(getRawImageData(), found.band, found.axis);
                     console.log("Auto-tune", JSON.stringify(variant), score);
 
                     if (score > bestScore) {
@@ -1123,10 +1064,6 @@
             setAnalysisEnabled(true);
             if (release_save && !autoTuneRunning)
                 document.getElementById("savereference").disabled = false;
-
-            // Only when no rotation is set yet: never overwrite a manual correction or "Rotate 180°"
-            if (!autoTuneRunning && getRotation() == 0)
-                autoLevel(true);
 
             if (imageWaiter)
                 imageWaiter.resolve();
