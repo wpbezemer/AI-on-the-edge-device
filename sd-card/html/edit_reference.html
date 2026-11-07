@@ -107,11 +107,14 @@
             before the alignment algorithm is processed to compensate only small misalignments of rotation or shift.
         </p>
         <p>
-            <b>"Auto-level"</b> (added in this modified version) finds the digit band and sets the rotation. It runs by itself when a new
-            image is taken while the rotation is still 0. Use <b>"Rotate 180°"</b> if the digits end up upside down. If the digits are not
-            found, use <b>"Draw Line"</b>: click where the first digit starts, then where the last digit ends.<br>
-            <b>"Auto-Tune Image"</b> takes several test images and keeps the flash intensity, brightness and contrast that give the most
-            readable digits.
+            Setup helpers (added in this modified version), step by step:<br>
+            1. <b>"Draw Line"</b>: click where the first digit starts, then where the last digit ends. The image is rotated so the digits
+            are horizontal; the click order sets the reading direction. <b>"Rotate 180°"</b> turns the image upside down if needed.<br>
+            2. <b>"Draw Box"</b>: click two opposite corners of a box tightly around the digits.<br>
+            3. <b>"Auto-level"</b>: fine-tunes the rotation within 5° so the edges in the box are exactly horizontal. Without a box it
+            tries to find the digit band itself; this works only for some meter types.<br>
+            4. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
+            box content most readable.
         </p>
         <p>
             After setting up your reference image don't forget to save the new configuration  with the button <b>"Save And Apply"</b>.
@@ -443,14 +446,22 @@
         </tr>
         <tr>
             <td colspan="3">
+                Rotation:
+                <input class="button" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
                 <input class="button" type="button" id="autolevel" value="Auto-level" onclick="autoLevel()" disabled>
                 <input class="button" type="button" id="rotate180" value="Rotate 180°" onclick="rotate180()" disabled>
-                <input class="button" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3">
+                Digits:
+                <input class="button" type="button" id="drawbox" value="Draw Box" onclick="startDrawBox()" disabled>
                 <input class="button" type="button" id="autotune" value="Auto-Tune Image" onclick="autoTune()" disabled>
             </td>
         </tr>
         <tr>
             <td colspan="3">
+                <div id="drawhint" style="min-height: 1.5em; font-weight: bold"></div>
                 <img id="img_loading" hidden>
                 <canvas style="max-width: 100%" id="canvas" hidden></canvas>
             </td>
@@ -471,6 +482,9 @@
     let autoTuneRunning = false;
     let lineMode = false;
     let lineStart = null;
+    let boxMode = false;
+    let boxStart = null;
+    let digitBox = null; // {x0, y0, x1, y1} on the image as shown
 
 
     function setVariableInputLimits()
@@ -643,31 +657,51 @@
     }
 
 
-    // Works on the raw image, so the result does not depend on the rotation already set
-    function autoLevel()
+    // silent: automatic run after a capture, only acts when the digit band is found by itself
+    function autoLevel(silent = false)
     {
-        let result = null;
-
         try {
-            result = AutoLevel.detectMeterRotation(getRawImageData());
+            let raw = getRawImageData();
+
+            // With a box: fine-tune the current rotation, works for any meter type
+            if (digitBox && !silent) {
+                let result = AutoLevel.refineRotation(raw, getRotation(), digitBox, 5);
+                if (result == null) {
+                    firework.launch('Auto-level: box too small, please draw it again', 'warning', 8000);
+                }
+                else if (result.atEdge) {
+                    firework.launch('Auto-level: no clear angle within 5° of the current rotation. Rotation not changed, please use "Draw Line" again', 'warning', 10000);
+                }
+                else if (result.strength < 2) {
+                    setRotation(result.angle);
+                    firework.launch('Auto-level: rotation set to ' + getRotation().toFixed(1) + '°, but the result is uncertain. Please check it; a box tightly around the digits gives the best result', 'warning', 10000);
+                }
+                else {
+                    setRotation(result.angle);
+                    firework.launch('Auto-level: rotation fine-tuned to ' + getRotation().toFixed(1) + '°', 'success', 5000);
+                }
+                return;
+            }
+
+            // Without a box: find the digit band (only some meter layouts)
+            let found = AutoLevel.detectMeterRotation(raw);
+            if (found != null) {
+                setRotation(found.angle);
+                if (silent)
+                    return;
+                if (found.upright == "red-dials")
+                    firework.launch('Auto-level: rotation set to ' + found.angle + '°', 'success', 5000);
+                else
+                    firework.launch('Auto-level: rotation set to ' + found.angle + '°. Use "Rotate 180°" if the digits are upside down', 'warning', 8000);
+                return;
+            }
         }
         catch (error) {
             console.error("Auto-level failed: " + error);
         }
 
-        if (result == null) {
-            firework.launch('Auto-level could not find the digits, please use "Draw Line"', 'warning', 8000);
-            return;
-        }
-
-        setRotation(result.angle);
-
-        if (result.upright == "red-dials") {
-            firework.launch('Auto-level: rotation set to ' + result.angle + '°', 'success', 5000);
-        }
-        else {
-            firework.launch('Auto-level: rotation set to ' + result.angle + '°. Use "Rotate 180°" if the digits are upside down', 'warning', 8000);
-        }
+        if (!silent)
+            firework.launch('Auto-level could not find the digits. Use "Draw Line" first, then "Draw Box" around the digits and "Auto-level" again', 'warning', 10000);
     }
 
 
@@ -695,15 +729,62 @@
             return;
         }
 
+        cancelDrawBox();
         lineMode = true;
         lineStart = null;
         document.getElementById("drawline").value = "Cancel Line";
-        firework.launch('Click where the first digit starts, then where the last digit ends', 'success', 8000);
+        setDrawHint("Draw Line: click where the first digit starts (Esc to cancel)");
+    }
+
+
+    // Shown above the image: a notification would cover the image where the user has to click
+    function setDrawHint(text)
+    {
+        document.getElementById("drawhint").textContent = text;
+    }
+
+
+    function startDrawBox()
+    {
+        if (boxMode) {
+            cancelDrawBox();
+            drawRotated(true);
+            return;
+        }
+
+        cancelDrawLine();
+        boxMode = true;
+        boxStart = null;
+        document.getElementById("drawbox").value = "Cancel Box";
+        setDrawHint("Draw Box: click the first corner of a box around the digits (Esc to cancel)");
+    }
+
+
+    function cancelDrawBox()
+    {
+        if (boxMode) setDrawHint("");
+        boxMode = false;
+        boxStart = null;
+        document.getElementById("drawbox").value = "Draw Box";
+    }
+
+
+    function drawDigitBox()
+    {
+        if (!digitBox)
+            return;
+        context.save();
+        context.strokeStyle = "#ffd400";
+        context.lineWidth = 2;
+        context.setLineDash([6, 4]);
+        context.strokeRect(digitBox.x0, digitBox.y0, digitBox.x1 - digitBox.x0, digitBox.y1 - digitBox.y0);
+        context.restore();
     }
 
 
     function cancelDrawLine()
     {
+        if (lineMode) setDrawHint("");
         lineMode = false;
         lineStart = null;
         document.getElementById("drawline").value = "Draw Line";
@@ -721,7 +802,34 @@
 
     function canvasClick(e)
     {
-        if (!lineMode || autoTuneRunning)
+        if (autoTuneRunning)
+            return;
+
+        if (boxMode) {
+            let p = getCanvasPoint(e);
+
+            if (boxStart == null) {
+                boxStart = p;
+                setDrawHint("Draw Box: now click the opposite corner");
+                return;
+            }
+
+            let box = {
+                x0: Math.round(Math.min(boxStart.x, p.x)), y0: Math.round(Math.min(boxStart.y, p.y)),
+                x1: Math.round(Math.max(boxStart.x, p.x)), y1: Math.round(Math.max(boxStart.y, p.y))
+            };
+            cancelDrawBox();
+
+            if (box.x1 - box.x0 < 20 || box.y1 - box.y0 < 10)
+                firework.launch('Box too small, please try again', 'warning', 5000);
+            else
+                digitBox = box;
+
+            drawRotated(true);
+            return;
+        }
+
+        if (!lineMode)
             return;
 
         let point = getCanvasPoint(e);
@@ -729,6 +837,7 @@
         if (lineStart == null) {
             lineStart = point;
             drawLineStart();
+            setDrawHint("Draw Line: now click where the last digit ends");
             return;
         }
 
@@ -764,8 +873,12 @@
         document.getElementById("autolevel").disabled = !enabled;
         document.getElementById("rotate180").disabled = !enabled;
         document.getElementById("drawline").disabled = !enabled;
+        document.getElementById("drawbox").disabled = !enabled;
         document.getElementById("autotune").disabled = !enabled || autoTuneRunning;
-        if (!enabled) cancelDrawLine();
+        if (!enabled) {
+            cancelDrawLine();
+            cancelDrawBox();
+        }
     }
 
 
@@ -809,20 +922,38 @@
     }
 
 
-    // Camera settings apply to every later measurement; only the digit band is scored
+    // The box (as shown) as a region of the raw image, in the form scoreReadability expects
+    function boxToRawRegion(box)
+    {
+        let a = getRotation() * Math.PI / 180;
+        let X = (box.x0 + box.x1) / 2 - imageObj.width / 2;
+        let Y = (box.y0 + box.y1) / 2 - imageObj.height / 2;
+        return {
+            band: {
+                cx: Math.cos(a) * X + Math.sin(a) * Y + imageObj.width / 2,
+                cy: -Math.sin(a) * X + Math.cos(a) * Y + imageObj.height / 2,
+                length: box.x1 - box.x0,
+                width: box.y1 - box.y0
+            },
+            axis: -getRotation()
+        };
+    }
+
+
+    // Camera settings apply to every later measurement; only the box (or the digit band found) is scored
     async function autoTune()
     {
         let found = null;
 
         try {
-            found = AutoLevel.detectMeterRotation(getRawImageData());
+            found = digitBox ? boxToRawRegion(digitBox) : AutoLevel.detectMeterRotation(getRawImageData());
         }
         catch (error) {
             console.error("Auto-tune failed: " + error);
         }
 
         if (found == null) {
-            firework.launch('Auto-tune could not find the digits', 'warning', 8000);
+            firework.launch('Auto-tune: please use "Draw Box" around the digits first', 'warning', 8000);
             return;
         }
 
@@ -925,8 +1056,10 @@
 
         context.restore();
 
-        if (_grid)
+        if (_grid) {
             drawGrid();
+            drawDigitBox();
+        }
     }
 
 
@@ -993,7 +1126,7 @@
 
             // Only when no rotation is set yet: never overwrite a manual correction or "Rotate 180°"
             if (!autoTuneRunning && getRotation() == 0)
-                autoLevel();
+                autoLevel(true);
 
             if (imageWaiter)
                 imageWaiter.resolve();
@@ -1039,6 +1172,15 @@
         context.lineTo(x, canvas.height);
         context.stroke();
 
+        if (boxStart) {
+            context.save();
+            context.strokeStyle = "#ffd400";
+            context.lineWidth = 2;
+            context.setLineDash([6, 4]);
+            context.strokeRect(boxStart.x, boxStart.y, x - boxStart.x, y - boxStart.y);
+            context.restore();
+        }
+
         if (lineStart) {
             context.strokeStyle = "#ff0000";
             context.lineWidth = 2;
@@ -1074,6 +1216,8 @@
         if (autoTuneRunning)
             return;
 
+        digitBox = null; // The saved reference is shown unrotated, a box drawn before does not fit
+
         let url = getDomainname() + "/fileserver/config/reference.jpg?" + Math.floor((Math.random() * 1000000) + 1);
         loadCanvas(url, false);
         isActReference = true;
@@ -1081,10 +1225,7 @@
         document.getElementById("savereference").disabled = true;
         document.getElementById("createreference").disabled = false;
         document.getElementById("take").disabled = true;
-        cancelDrawLine();
-        document.getElementById("autolevel").disabled = true;
-        document.getElementById("rotate180").disabled = true;
-        document.getElementById("drawline").disabled = true;
+        setAnalysisEnabled(false);
         document.getElementById("autotune").disabled = true;
 
         let jsonConfigKeyified = []; // Config: array as key-value pairs
@@ -1122,6 +1263,7 @@
         document.addEventListener("keydown", function(e) {
             if (e.key == "Escape") {
                 cancelDrawLine();
+                cancelDrawBox();
                 if (!isActReference) drawRotated(true);
             }
         }, false);

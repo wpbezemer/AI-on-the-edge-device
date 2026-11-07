@@ -247,5 +247,87 @@ var AutoLevel = (function () {
         return (bright - dark) / 255 - clipped / total;
     }
 
-    return { detectMeterRotation: detectMeterRotation, scoreReadability: scoreReadability };
+    /* Fine-tune a rotation that is already roughly right (manual value or Draw Line).
+       Works for any meter type: inside the box drawn by the user, the angle is searched
+       where horizontal edges (digit window, digit base lines, print) line up best.
+
+       imageData: raw camera image. angle: current rotation in degrees (as canvas.rotate,
+       about the image centre). box: {x0, y0, x1, y1} on the rotated image as shown;
+       without box the middle of the image is used. range: search +/- degrees.
+       Returns { angle, strength, atEdge } or null. strength < 2 means a weak result; atEdge means
+       the best angle lies at the end of the search range, so the true angle was not found. */
+    function refineRotation(imageData, angle, box, range) {
+        var iw = imageData.width, ih = imageData.height, d = imageData.data;
+        range = range || 5;
+        if (!box) box = { x0: iw * 0.15, y0: ih * 0.15, x1: iw * 0.85, y1: ih * 0.85 };
+
+        var bx0 = Math.min(box.x0, box.x1), bx1 = Math.max(box.x0, box.x1);
+        var by0 = Math.min(box.y0, box.y1), by1 = Math.max(box.y0, box.y1);
+        var bw = bx1 - bx0, bh = by1 - by0;
+        if (bw < 16 || bh < 8) return null;
+
+        // Grey levels once, sampled bilinearly
+        var gray = new Float32Array(iw * ih);
+        for (var i = 0; i < iw * ih; i++) gray[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+        function sample(x, y) {
+            if (x < 0 || y < 0 || x > iw - 1.001 || y > ih - 1.001) return NaN;
+            var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, p = y0 * iw + x0;
+            return (gray[p] * (1 - fx) + gray[p + 1] * fx) * (1 - fy) + (gray[p + iw] * (1 - fx) + gray[p + iw + 1] * fx) * fy;
+        }
+
+        // Shown point (X, Y) at rotation a comes from the raw image point below
+        var a = angle * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+        function rawX(X, Y) { return ca * (X - iw / 2) + sa * (Y - ih / 2) + iw / 2; }
+        function rawY(X, Y) { return -sa * (X - iw / 2) + ca * (Y - ih / 2) + ih / 2; }
+
+        // About 240 samples along the long side of the box
+        var step = Math.max(bw, bh) / 240, nu = Math.floor(bw / step), nv = Math.floor(bh / step);
+        var cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+
+        // Sum of squared row sums of the vertical gradient: high when edges lie on the rows
+        function score(phiDeg) {
+            var p = phiDeg * Math.PI / 180, cp = Math.cos(p), sp = Math.sin(p), total = 0;
+            for (var v = 1; v < nv - 1; v++) {
+                var row = 0;
+                for (var u = 0; u < nu; u++) {
+                    var qx = (u - nu / 2) * step, qy = (v - nv / 2) * step;
+                    var X = cx + cp * qx - sp * qy, Y = cy + sp * qx + cp * qy;
+                    var ox = -sp * step, oy = cp * step;      // one sample "down" along the grid
+                    var g1 = sample(rawX(X + ox, Y + oy), rawY(X + ox, Y + oy));
+                    var g0 = sample(rawX(X - ox, Y - oy), rawY(X - ox, Y - oy));
+                    if (g1 === g1 && g0 === g0) row += g1 - g0;   // skips NaN outside the image
+                }
+                total += row * row;
+            }
+            return total;
+        }
+
+        var scores = [], best = 0, bestScore = -1;
+        for (var phi = -range; phi <= range + 1e-9; phi += 0.5) {
+            var s = score(phi);
+            scores.push(s);
+            if (s > bestScore) { bestScore = s; best = phi; }
+        }
+        var coarseBest = best;
+        for (phi = coarseBest - 0.5; phi <= coarseBest + 0.5 + 1e-9; phi += 0.05) {
+            s = score(phi);
+            if (s > bestScore) { bestScore = s; best = phi; }
+        }
+
+        scores.sort(function (x, y) { return x - y; });
+        var median = scores[Math.floor(scores.length / 2)];
+
+        // Content tilted by +phi (clockwise as shown) needs the rotation reduced by phi
+        var result = angle - best;
+        while (result > 180) result -= 360;
+        while (result <= -180) result += 360;
+
+        return {
+            angle: Math.round(result * 100) / 100,
+            strength: median > 0 ? Math.round(bestScore / median * 10) / 10 : 0,
+            atEdge: Math.abs(coarseBest) >= range
+        };
+    }
+
+    return { detectMeterRotation: detectMeterRotation, scoreReadability: scoreReadability, refineRotation: refineRotation };
 })();
