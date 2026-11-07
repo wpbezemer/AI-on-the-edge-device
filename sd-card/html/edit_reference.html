@@ -108,9 +108,9 @@
         </p>
         <p>
             Setup helpers (added in this modified version), step by step:<br>
-            1. <b>"Draw Line"</b>: click where the first digit starts, then where the last digit ends. The image is rotated so the digits
-            are horizontal; the click order sets the reading direction. <b>"Rotate 180°"</b> turns the image upside down if needed.<br>
-            2. <b>"Draw Box"</b>: click two opposite corners of a box tightly around the digits.<br>
+            1. <b>"Draw Line"</b> (next to 'Image Rotation'): click where the first digit starts, then where the last digit ends. The image is rotated so the digits
+            are horizontal; the click order sets the reading direction. <b>"180°"</b> (next to it) turns the image upside down if needed.<br>
+            2. <b>"Draw Box"</b> (below 'Auto-Tune Image'): click two opposite corners of a box tightly around the digits.<br>
             3. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
             box content most readable.
         </p>
@@ -414,13 +414,17 @@
             <td>
                 <span>Image Rotation</span>
             </td>
-            <td class="camParameter">
-				<form id="imagealignment_imagerotation_form">
+            <td class="camParameter" style="white-space: nowrap;">
+				<form id="imagealignment_imagerotation_form" style="display: inline-block; white-space: nowrap;">
 					<input required type="number" min="-180.0" max="180.0" step="0.1" value="0.0"
 						name="imagealignment.imagerotation" id="imagealignment_imagerotation_value"
 						onchange="(!validity.rangeUnderflow||(value=-180.0)) && (!validity.rangeOverflow||(value=180.0)) &&
 							(!validity.stepMismatch||(value=this.value));drawRotated();gatherChangedParameter(this.form)">°
 				</form>
+				<span style="display: inline-block; white-space: nowrap;">
+					<input class="button" style="width: auto; padding: 0 8px;" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
+					<input class="button" style="width: auto; padding: 0 8px;" type="button" id="rotate180" value="180°" title="Rotate 180°" onclick="rotate180()" disabled>
+				</span>
             </td>
         </tr>
     </table>
@@ -432,8 +436,13 @@
             <col span="1" style="width: 33.3%;">
         </colgroup>
         <tr>
-            <td style="vertical-align: bottom;">
+            <td colspan="3">
                 <b>Reference Image</b>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <input class="button" type="button" id="autotune" value="Auto-Tune Image" onclick="autoTune()" disabled>
             </td>
             <td>
                 <input class="button" type="button" id="take" onclick="doTake(true)" value="Update Image">
@@ -444,16 +453,7 @@
         </tr>
         <tr>
             <td colspan="3">
-                Rotation:
-                <input class="button" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled>
-                <input class="button" type="button" id="rotate180" value="Rotate 180°" onclick="rotate180()" disabled>
-            </td>
-        </tr>
-        <tr>
-            <td colspan="3">
-                Digits:
                 <input class="button" type="button" id="drawbox" value="Draw Box" onclick="startDrawBox()" disabled>
-                <input class="button" type="button" id="autotune" value="Auto-Tune Image" onclick="autoTune()" disabled>
             </td>
         </tr>
         <tr>
@@ -834,7 +834,7 @@
     function lockCameraInputs(lock)
     {
         if (lock) {
-            lockedCameraInputs = [...document.querySelectorAll(".camParameter input, .camParameter select")].filter((el) => !el.disabled);
+            lockedCameraInputs = [...document.querySelectorAll(".camParameter input:not([type=button]), .camParameter select")].filter((el) => !el.disabled);
             lockedCameraInputs.forEach((el) => el.disabled = true);
         }
         else {
