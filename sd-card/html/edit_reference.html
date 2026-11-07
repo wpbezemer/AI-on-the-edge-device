@@ -112,8 +112,8 @@
             are horizontal; the click order sets the reading direction. <b>"180°"</b> (next to it) turns the image upside down if needed.<br>
             2. <b>"Draw Box"</b> (below 'Auto-Tune Image'): click two opposite corners of a box tightly around the digits.<br>
             'Use box for' sets what the box is used for. <b>None</b>: the box is only a guide, Auto-tune scores the whole image.
-            <b>Auto-tune</b>: Auto-tune scores only the box. <b>Auto-tune and zoom</b>: the zoom factor and offsets are first set so
-            the box fills the image, then Auto-tune runs; draw this box around everything that has to be read (digits and dials).<br>
+            <b>Auto-tune</b>: Auto-tune scores only the box. <b>Auto-tune and zoom</b>: right after drawing the box, the zoom factor and
+            offsets are set so the box fills the image and a new image is taken; draw this box around everything that has to be read (digits and dials).<br>
             3. <b>"Auto-Tune Image"</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the
             box content most readable.
         </p>
@@ -492,6 +492,7 @@
     let boxStart = null;
     let digitBox = null; // {x0, y0, x1, y1} on the image as shown
     let digitBoxZoom = null; // Zoom settings of the image the box was drawn on
+    let digitBoxZoomed = false; // "Auto-tune and zoom": zoom already set for this box
 
 
     function setVariableInputLimits()
@@ -784,9 +785,13 @@
             else {
                 digitBox = box;
                 digitBoxZoom = getZoom();
+                digitBoxZoomed = false;
             }
 
             drawRotated(true);
+
+            if (digitBox && document.getElementById("boxuse").value == "tunezoom")
+                zoomToBox();
             return;
         }
 
@@ -919,8 +924,48 @@
         }
         catch (error) {}
 
-        if (document.getElementById("boxuse").value == "tunezoom")
-            firework.launch('Auto-tune and zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
+        if (document.getElementById("boxuse").value == "tunezoom") {
+            if (digitBox && !digitBoxZoomed && !isActReference)
+                zoomToBox();
+            else
+                firework.launch('Auto-tune and zoom: draw the box around everything that has to be read (digits and dials), anything outside is cut off', 'warning', 10000);
+        }
+    }
+
+
+    // "Auto-tune and zoom": set zoom factor and offsets so the box fills the image, then take a new image
+    async function zoomToBox()
+    {
+        if (document.getElementById("takeimage_camera_mirrorimage_value").value == "true" ||
+            document.getElementById("takeimage_camera_flipimage_value").value == "true") {
+            firework.launch('Zoom from the box does not support Mirror Image or Flip Image yet, please set the zoom manually', 'warning', 10000);
+            return false;
+        }
+
+        let oldWin = zoomWindow(getZoom());
+        let corners = boxCorners(digitBox).map((p) => shownToSensor(p, oldWin));
+        applyZoom(zoomForBox(digitBox));
+        let newZoom = getZoom();
+
+        // The same piece of the meter, on the zoomed image
+        let box = boundingBox(corners.map((p) => sensorToShown(p, zoomWindow(newZoom))));
+        digitBox = { x0: Math.round(box.x0), y0: Math.round(box.y0), x1: Math.round(box.x1), y1: Math.round(box.y1) };
+        digitBoxZoom = newZoom;
+        digitBoxZoomed = true;
+
+        try {
+            await takeImageAndWait(true);
+        }
+        catch (error) {
+            console.error("Zoom image failed: " + error);
+            return false;
+        }
+
+        if (newZoom.factor <= 1050)
+            firework.launch('Zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x: the box covers (almost) the whole image, so there is hardly anything to zoom', 'warning', 10000);
+        else
+            firework.launch('Zoom set to ' + (newZoom.factor / 1000).toFixed(2) + 'x so the box fills the image. Save And Apply to keep it', 'success', 8000);
+        return true;
     }
 
 
@@ -1033,11 +1078,9 @@
             return;
         }
 
-        if (use == "tunezoom" && (document.getElementById("takeimage_camera_mirrorimage_value").value == "true" ||
-                                  document.getElementById("takeimage_camera_flipimage_value").value == "true")) {
-            firework.launch('Auto-tune and zoom does not support Mirror Image or Flip Image yet, please set the zoom manually', 'warning', 10000);
+        // Normally already done when the box was drawn
+        if (use == "tunezoom" && !digitBoxZoomed && !(await zoomToBox()))
             return;
-        }
 
         let start = {
             intensity: Number(document.getElementById("takeimage_flashlight_flashintensity_value").value),
@@ -1056,20 +1099,7 @@
         document.getElementById("take").disabled = true;
 
         try {
-            let zoomNote = "";
-
-            if (use == "tunezoom") {
-                let oldWin = zoomWindow(getZoom());
-                let corners = boxCorners(digitBox).map((p) => shownToSensor(p, oldWin));
-                applyZoom(zoomForBox(digitBox));
-                let newZoom = getZoom();
-
-                // The same piece of the meter, on the zoomed image
-                let box = boundingBox(corners.map((p) => sensorToShown(p, zoomWindow(newZoom))));
-                digitBox = { x0: Math.round(box.x0), y0: Math.round(box.y0), x1: Math.round(box.x1), y1: Math.round(box.y1) };
-                digitBoxZoom = newZoom;
-                zoomNote = ', zoom ' + (newZoom.factor / 1000).toFixed(2) + 'x';
-            }
+            let zoomNote = (use == "tunezoom") ? ', zoom ' + (getZoom().factor / 1000).toFixed(2) + 'x' : '';
 
             let found = (use == "none") ?
                 { band: { cx: imageObj.width / 2, cy: imageObj.height / 2, length: imageObj.width * 0.9, width: imageObj.height * 0.45 }, axis: 0 } :
