@@ -32,6 +32,22 @@
       margin: 0;
     }
 
+    .rotation-helpers {
+      flex-wrap: wrap;
+    }
+
+    .header-actions select {
+      width: auto;
+      margin: 0;
+    }
+
+    .rotation-helpers .button {
+      width: auto;
+      min-width: 0;
+      flex: 1 1 0;
+      padding: 0 8px;
+    }
+
     th,
     td {
       height: 40px;
@@ -110,6 +126,17 @@
             For reliable evaluation, ensure the image is horizontally aligned. Use the 'Image Rotation' parameter to pre-rotate the image,
             which allows the alignment algorithm to focus solely on correcting minor shifts.
           </p>
+          <p>
+            Setup helpers, step by step:<br />
+            1. <b>Draw Line</b> (below 'Image Rotation'): click where the first digit starts, then where the last digit ends. The
+            image is rotated so the digits are horizontal; the click order sets the reading direction. <b>Rotate 180°</b> turns the image
+            upside down if needed.<br />
+            2. <b>Draw Box</b>: click two opposite corners of a box around everything that has to be read (digits and dials).<br />
+            3. <b>Zoom To Box</b> (below 'Zoom Offset Y'), optional: sets zoom factor and offsets so the box fills the image and takes a new
+            image. <b>Reset Zoom</b> goes back to 1.00x.<br />
+            4. <b>Auto-Tune Image</b>: takes several test images and keeps the flash intensity, brightness and contrast that make the chosen
+            area most readable: the box, or the whole image (selection next to the button, remembered in this browser).
+          </p>
           <p>Once satisfied, click <b>Save And Apply</b> to activate your configuration immediately without a reboot.</p>
         </div>
       </details>
@@ -129,13 +156,20 @@
             <img id="img_loading" alt="Loading..." />
             <canvas id="canvas" hidden></canvas>
           </div>
+          <div id="drawhint" style="min-height: 1.5em; margin-top: 6px; text-align: center; font-weight: bold"></div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
           <span>Parametrization</span>
-          <div class="header-actions">
+          <div class="header-actions" style="flex-wrap: wrap; justify-content: flex-end">
+            <input class="button" type="button" id="drawbox" value="Draw Box" onclick="startDrawBox()" disabled />
+            <select id="tunearea" title="Area that Auto-Tune scores" onchange="setTuneArea(this.value)" disabled>
+              <option value="box">Tune: box</option>
+              <option value="image">Tune: whole image</option>
+            </select>
+            <input class="button" type="button" id="autotune" value="Auto-Tune Image" onclick="autoTune()" disabled />
             <input class="button" type="button" id="take" onclick="doTake()" value="Update Image" disabled />
             <input class="button btn-action" type="button" id="savereference" value="Save And Apply" onclick="saveReference()" disabled />
           </div>
@@ -246,6 +280,15 @@
                       " />
                 </form>
               </td>
+            </tr>
+            <tr>
+              <td colspan="3">
+                <div class="header-actions rotation-helpers">
+                  <input class="button" type="button" id="zoombox" value="Zoom To Box" onclick="zoomBoxAction()" disabled />
+                  <input class="button" type="button" id="resetzoom" value="Reset Zoom" onclick="resetZoom()" disabled />
+                </div>
+              </td>
+              <td colspan="3"></td>
             </tr>
 
             <tr>
@@ -439,6 +482,15 @@
                 </form>
               </td>
             </tr>
+            <tr>
+              <td colspan="3"></td>
+              <td colspan="3">
+                <div class="header-actions rotation-helpers">
+                  <input class="button" type="button" id="drawline" value="Draw Line" onclick="startDrawLine()" disabled />
+                  <input class="button" type="button" id="rotate180" value="Rotate 180°" onclick="rotate180()" disabled />
+                </div>
+              </td>
+            </tr>
           </table>
         </div>
       </div>
@@ -446,12 +498,24 @@
   </div>
 
   <script src="global.js?v=$COMMIT_HASH"></script>
+  <script src="auto_tune.js?v=$COMMIT_HASH"></script>
   <script>
     let canvas = document.getElementById('canvas');
     let context = canvas.getContext('2d');
     let imageObj = new Image();
     let isActReference = false;
     let currentBlobUrl = null;
+    let imageWaiter = null; // { resolve, reject } of the capture that Auto-tune waits for
+    let lockedCameraInputs = [];
+    let autoTuneRunning = false;
+    let lineMode = false;
+    let lineStart = null;
+    let boxMode = false;
+    let boxStart = null;
+    let digitBox = null; // {x0, y0, x1, y1} on the image as shown
+    let digitBoxZoom = null; // Zoom setting of the image the box was drawn on
+    let digitBoxZoomed = false; // Zoom To Box was already applied to this box
+    let tuneArea = 'box'; // Page setting, not part of the meter config: remembered in this browser only
 
     function setVariableInputLimits() {
       let sensorFrameSizeWidth = 1600; // Default
@@ -548,6 +612,9 @@
 
       specialeffect = params.specialeffect;
 
+      setAnalysisEnabled(false); // Until the new image is decoded, the old one must not be analysed
+      document.getElementById('savereference').disabled = true;
+
       const flashTime = parseInt(params.flashtime, 10) || 1000;
       const timeoutMs = Math.max(flashTime + 10000, 15000);
       const res = await apiCallNotify(`/camera?${new URLSearchParams(params)}`, { timeout: timeoutMs }, {
@@ -559,17 +626,482 @@
       if (!res.ok) {
         document.getElementById('createreference').disabled = false;
         showReference();
-        return;
+        return false;
       }
 
       if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
       currentBlobUrl = URL.createObjectURL(res.data);
-      loadCanvas(currentBlobUrl, true);
+      loadCanvas(currentBlobUrl, true, true);
       isActReference = false;
 
-      document.getElementById('showactualimage').disabled = false;
+      document.getElementById('showactualimage').disabled = autoTuneRunning;
       document.getElementById('createreference').disabled = true;
-      document.getElementById('savereference').disabled = false;
+      return true;
+    }
+
+    function setAnalysisEnabled(enabled) {
+      document.getElementById('rotate180').disabled = !enabled;
+      document.getElementById('drawline').disabled = !enabled;
+      document.getElementById('drawbox').disabled = !enabled;
+      document.getElementById('autotune').disabled = !enabled || autoTuneRunning;
+      document.getElementById('tunearea').disabled = !enabled || autoTuneRunning;
+      document.getElementById('zoombox').disabled = !enabled;
+      document.getElementById('resetzoom').disabled = !enabled;
+      if (!enabled) {
+        cancelDrawLine();
+        cancelDrawBox();
+      }
+    }
+
+    // Auto-tune scores a fixed image region, so other camera settings (zoom, ...) must not change meanwhile
+    function lockCameraInputs(lock) {
+      if (lock) {
+        lockedCameraInputs = [...document.querySelectorAll('.camParameter input:not([type=button]), .camParameter select')].filter((el) => !el.disabled);
+        lockedCameraInputs.forEach((el) => (el.disabled = true));
+      } else {
+        lockedCameraInputs.forEach((el) => (el.disabled = false));
+        lockedCameraInputs = [];
+      }
+    }
+
+    function getRotation() {
+      return parseFloat(document.getElementById('imagealignment_imagerotation_value').value) || 0;
+    }
+
+    function setRotation(angle) {
+      while (angle > 180) angle -= 360;
+      while (angle <= -180) angle += 360;
+
+      const el = document.getElementById('imagealignment_imagerotation_value');
+      el.value = (Math.round(angle * 10) / 10).toFixed(1);
+      el.dispatchEvent(new Event('change')); // Redraw and mark parameter as changed
+    }
+
+    function getRawImageData() {
+      const raw = document.createElement('canvas');
+      raw.width = imageObj.width;
+      raw.height = imageObj.height;
+      const ctx = raw.getContext('2d');
+      ctx.drawImage(imageObj, 0, 0);
+      return ctx.getImageData(0, 0, raw.width, raw.height);
+    }
+
+    // Works on the raw image, so the result does not depend on the rotation already set
+    function rotate180() {
+      setRotation(getRotation() + 180);
+    }
+
+    // The canvas can be displayed larger or smaller than the image, line angles need image pixels
+    function getCanvasPoint(e) {
+      const box = canvas.getBoundingClientRect();
+      return {
+        x: ((e.clientX - box.left) * canvas.width) / box.width,
+        y: ((e.clientY - box.top) * canvas.height) / box.height,
+      };
+    }
+
+    function startDrawLine() {
+      if (lineMode) {
+        cancelDrawLine();
+        return;
+      }
+
+      cancelDrawBox();
+      lineMode = true;
+      lineStart = null;
+      document.getElementById('drawline').value = 'Cancel Line';
+      setDrawHint('Draw Line: click where the first digit starts (Esc to cancel)');
+    }
+
+    // Shown below the image: a notification would cover the image where the user has to click
+    function setDrawHint(text) {
+      document.getElementById('drawhint').textContent = text;
+    }
+
+    function cancelDrawLine() {
+      if (lineMode) setDrawHint('');
+      lineMode = false;
+      lineStart = null;
+      document.getElementById('drawline').value = 'Draw Line';
+    }
+
+    function drawLineStart() {
+      context.fillStyle = '#ff0000';
+      context.beginPath();
+      context.arc(lineStart.x, lineStart.y, 4, 0, 2 * Math.PI);
+      context.fill();
+    }
+
+    function startDrawBox() {
+      if (boxMode) {
+        cancelDrawBox();
+        drawRotated(true);
+        return;
+      }
+
+      cancelDrawLine();
+      boxMode = true;
+      boxStart = null;
+      document.getElementById('drawbox').value = 'Cancel Box';
+      setDrawHint('Draw Box: click the first corner of a box around the digits (Esc to cancel)');
+    }
+
+    function cancelDrawBox() {
+      if (boxMode) setDrawHint('');
+      boxMode = false;
+      boxStart = null;
+      document.getElementById('drawbox').value = 'Draw Box';
+    }
+
+    function drawDigitBox() {
+      if (!digitBox) return;
+      context.save();
+      context.strokeStyle = '#ffd400';
+      context.lineWidth = 2;
+      context.setLineDash([6, 4]);
+      context.strokeRect(digitBox.x0, digitBox.y0, digitBox.x1 - digitBox.x0, digitBox.y1 - digitBox.y0);
+      context.restore();
+    }
+
+    function canvasClick(e) {
+      if (autoTuneRunning) return;
+
+      if (boxMode) {
+        const point = getCanvasPoint(e);
+
+        if (boxStart == null) {
+          boxStart = point;
+          setDrawHint('Draw Box: now click the opposite corner');
+          return;
+        }
+
+        const box = {
+          x0: Math.round(Math.min(boxStart.x, point.x)),
+          y0: Math.round(Math.min(boxStart.y, point.y)),
+          x1: Math.round(Math.max(boxStart.x, point.x)),
+          y1: Math.round(Math.max(boxStart.y, point.y)),
+        };
+        cancelDrawBox();
+
+        if (box.x1 - box.x0 < 20 || box.y1 - box.y0 < 10) {
+          firework.launch('Box too small, please try again', 'warning', 5000);
+        } else {
+          digitBox = box;
+          digitBoxZoom = getZoom();
+          digitBoxZoomed = false;
+        }
+        drawRotated(true);
+        return;
+      }
+
+      if (!lineMode) return;
+
+      const point = getCanvasPoint(e);
+
+      if (lineStart == null) {
+        lineStart = point;
+        drawLineStart();
+        setDrawHint('Draw Line: now click where the last digit ends');
+        return;
+      }
+
+      const dx = point.x - lineStart.x;
+      const dy = point.y - lineStart.y;
+      cancelDrawLine();
+
+      if (Math.sqrt(dx * dx + dy * dy) < 20) {
+        firework.launch('Line too short, please try again', 'warning', 5000);
+        drawRotated(true);
+        return;
+      }
+
+      // Clicks are made on the image as shown, so correct on top of the current rotation.
+      // The click order gives the reading direction, so upside down is corrected as well.
+      setRotation(getRotation() - (Math.atan2(dy, dx) * 180) / Math.PI);
+    }
+
+    function setCameraValue(id, value) {
+      const el = document.getElementById(id);
+      const wasDisabled = el.disabled;
+      el.disabled = false; // A disabled field is skipped by FormData and would not be marked as changed
+      el.value = value;
+      el.dispatchEvent(new Event('change')); // Update output and mark parameter as changed
+      el.disabled = wasDisabled;
+    }
+
+    function setTuneValues(tune) {
+      setCameraValue('takeimage_flashlight_flashintensity_value', tune.intensity);
+      setCameraValue('takeimage_camera_brightness_value', tune.brightness);
+      setCameraValue('takeimage_camera_contrast_value', tune.contrast);
+    }
+
+    async function takeImageAndWait() {
+      const loaded = new Promise((resolve, reject) => {
+        imageWaiter = { resolve, reject };
+      });
+      let timer = null;
+
+      try {
+        if (!(await doTake())) throw new Error('Capture failed');
+
+        await Promise.race([loaded, new Promise((resolve, reject) => (timer = setTimeout(() => reject(new Error('Image load timeout')), 15000)))]);
+      } finally {
+        clearTimeout(timer);
+        imageWaiter = null;
+      }
+    }
+
+    // The box (as shown) as a region of the raw image, in the form scoreReadability expects
+    function boxToRawRegion(box) {
+      const a = (getRotation() * Math.PI) / 180;
+      const X = (box.x0 + box.x1) / 2 - imageObj.width / 2;
+      const Y = (box.y0 + box.y1) / 2 - imageObj.height / 2;
+      return {
+        band: {
+          cx: Math.cos(a) * X + Math.sin(a) * Y + imageObj.width / 2,
+          cy: -Math.sin(a) * X + Math.cos(a) * Y + imageObj.height / 2,
+          length: box.x1 - box.x0,
+          width: box.y1 - box.y0,
+        },
+        axis: -getRotation(),
+      };
+    }
+
+    // Camera settings apply to every later measurement; only the box (or the whole image) is scored
+    async function autoTune() {
+      const usesBox = tuneArea == 'box';
+
+      if (usesBox && !digitBox) {
+        firework.launch('Auto-tune: please use "Draw Box" around the digits first, or choose "Tune: whole image"', 'warning', 8000);
+        return;
+      }
+
+      if (usesBox && !sameZoom(digitBoxZoom, getZoom())) {
+        firework.launch('The zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
+        return;
+      }
+
+      const found = usesBox
+        ? boxToRawRegion(digitBox)
+        : { band: { cx: imageObj.width / 2, cy: imageObj.height / 2, length: imageObj.width * 0.9, width: imageObj.height * 0.45 }, axis: 0 };
+      const zoomNote = getZoom().factor > 1000 ? `, zoom ${(getZoom().factor / 1000).toFixed(2)}x` : '';
+      const start = {
+        intensity: Number(document.getElementById('takeimage_flashlight_flashintensity_value').value),
+        brightness: Number(document.getElementById('takeimage_camera_brightness_value').value),
+        contrast: Number(document.getElementById('takeimage_camera_contrast_value').value),
+      };
+      const intensities = [...new Set([start.intensity, Math.round(start.intensity * 0.6), Math.round(start.intensity * 0.35)])];
+      let best = null;
+      let bestScore = -2;
+
+      autoTuneRunning = true;
+      lockCameraInputs(true);
+      setAnalysisEnabled(false);
+      document.getElementById('autotune').disabled = true;
+      document.getElementById('savereference').disabled = true;
+      document.getElementById('take').disabled = true;
+      document.getElementById('showactualimage').disabled = true;
+
+      try {
+        for (const intensity of intensities) {
+          const variants = [
+            { intensity, brightness: start.brightness, contrast: start.contrast },
+            { intensity, brightness: Math.max(start.brightness - 1, -2), contrast: Math.min(start.contrast + 1, 2) },
+          ];
+
+          for (const variant of variants) {
+            setTuneValues(variant);
+            await takeImageAndWait();
+
+            const score = AutoTune.scoreReadability(getRawImageData(), found.band, found.axis);
+            console.log('Auto-tune', JSON.stringify(variant), score);
+
+            if (score > bestScore) {
+              bestScore = score;
+              best = variant;
+            }
+          }
+        }
+
+        setTuneValues(best);
+        await takeImageAndWait(); // Controls stay locked until this final image is shown
+
+        autoTuneRunning = false;
+        lockCameraInputs(false);
+        document.getElementById('savereference').disabled = false;
+        document.getElementById('take').disabled = false;
+        document.getElementById('showactualimage').disabled = false;
+        setAnalysisEnabled(true);
+        firework.launch(`Auto-tune${zoomNote}: flash ${best.intensity}%, brightness ${best.brightness}, contrast ${best.contrast}. Save to keep it`, 'success', 8000);
+      } catch (error) {
+        console.error('Auto-tune stopped:', error);
+        autoTuneRunning = false;
+        lockCameraInputs(false);
+        showReference(); // Back to the saved settings
+        firework.launch('Auto-tune stopped, settings restored. Please create a new image', 'danger', 8000);
+      }
+    }
+
+    function restoreTuneArea() {
+      let area = 'box';
+      try {
+        const saved = localStorage.getItem('referenceTuneArea');
+        if (saved == 'box' || saved == 'image') area = saved;
+      } catch (error) {} // Storage blocked: keep the default
+      setTuneArea(area, false);
+    }
+
+    function setTuneArea(area, remember = true) {
+      tuneArea = area;
+      document.getElementById('tunearea').value = area;
+      if (!remember) return;
+      try {
+        localStorage.setItem('referenceTuneArea', area);
+      } catch (error) {}
+    }
+
+    function zoomBoxAction() {
+      if (!digitBox) {
+        firework.launch('Please use "Draw Box" first: around everything that has to be read (digits and dials)', 'warning', 8000);
+        return;
+      }
+      if (!sameZoom(digitBoxZoom, getZoom())) {
+        firework.launch('The zoom changed after the box was drawn, please draw the box again', 'warning', 8000);
+        return;
+      }
+      if (digitBoxZoomed) {
+        firework.launch('Already zoomed to this box. Draw a new box to zoom again', 'warning', 8000);
+        return;
+      }
+      zoomToBox();
+    }
+
+    async function resetZoom() {
+      const zoom = getZoom();
+      if (zoom.factor == 1000 && zoom.x == 0 && zoom.y == 0) {
+        firework.launch('Zoom is already 1.00x', 'success', 4000);
+        return;
+      }
+      applyZoom({ factor: 1000, x: 0, y: 0 });
+      digitBox = null; // The box no longer fits the image
+      digitBoxZoomed = false;
+      try {
+        await takeImageAndWait();
+        firework.launch('Zoom reset to 1.00x. Save And Apply to keep it', 'success', 5000);
+      } catch (error) {
+        console.error('Reset zoom image failed:', error);
+      }
+    }
+
+    // Set zoom factor and offsets so the box fills the image, then take a new image
+    async function zoomToBox() {
+      if (document.getElementById('takeimage_camera_mirrorimage_value').value == 'true' ||
+        document.getElementById('takeimage_camera_flipimage_value').value == 'true') {
+        firework.launch('Zoom To Box does not support Mirror Image or Flip Image yet, please set the zoom manually', 'warning', 10000);
+        return false;
+      }
+
+      const corners = boxCorners(digitBox).map((p) => shownToSensor(p, zoomWindow(getZoom())));
+      applyZoom(zoomForBox(digitBox));
+      const newZoom = getZoom();
+
+      // The same piece of the meter, on the zoomed image
+      const box = boundingBox(corners.map((p) => sensorToShown(p, zoomWindow(newZoom))));
+      digitBox = { x0: Math.round(box.x0), y0: Math.round(box.y0), x1: Math.round(box.x1), y1: Math.round(box.y1) };
+      digitBoxZoom = newZoom;
+      digitBoxZoomed = true;
+
+      try {
+        await takeImageAndWait();
+      } catch (error) {
+        console.error('Zoom image failed:', error);
+        return false;
+      }
+
+      const factor = (newZoom.factor / 1000).toFixed(2);
+      if (newZoom.factor <= 1050)
+        firework.launch(`Zoom ${factor}x: the box covers (almost) the whole image, so there is hardly anything to zoom`, 'warning', 10000);
+      else firework.launch(`Zoom set to ${factor}x so the box fills the image. Save And Apply to keep it`, 'success', 8000);
+      return true;
+    }
+
+    function getSensorSize() {
+      const model = typeof jsonConfig !== 'undefined' && jsonConfig.takeimage ? jsonConfig.takeimage.camera.cameramodel : 1;
+      if (model == 2) return { w: 2048, h: 1536 }; // OV3660
+      if (model == 3) return { w: 2560, h: 1920 }; // OV5640
+      return { w: 1600, h: 1200 }; // OV2640 (default)
+    }
+
+    function getZoom() {
+      return {
+        factor: Number(document.getElementById('takeimage_camera_zoomfactor_value').value) || 1000,
+        x: Number(document.getElementById('takeimage_camera_zoomoffsetx_value').value) || 0,
+        y: Number(document.getElementById('takeimage_camera_zoomoffsety_value').value) || 0,
+      };
+    }
+
+    // Sensor window of a zoom setting, same calculation as the firmware (ClassControlCamera::setImageSize)
+    function zoomWindow(zoom) {
+      const sensor = getSensorSize();
+      let w = Math.floor((sensor.w * 1000) / zoom.factor);
+      w -= w % 4;
+      let h = Math.floor((sensor.h * 1000) / zoom.factor);
+      h -= h % 4;
+      const maxX = (sensor.w - w) / 2;
+      const maxY = (sensor.h - h) / 2;
+      const x = Math.min(Math.max(zoom.x, -maxX), maxX);
+      const y = Math.min(Math.max(zoom.y, -maxY), maxY);
+      return { left: maxX + x, top: maxY + y, w, h };
+    }
+
+    // Point on the image as shown <-> point on the camera sensor, for a given zoom window
+    function shownToSensor(p, win) {
+      const a = (getRotation() * Math.PI) / 180;
+      const X = p.x - imageObj.width / 2;
+      const Y = p.y - imageObj.height / 2;
+      const rx = Math.cos(a) * X + Math.sin(a) * Y + imageObj.width / 2;
+      const ry = -Math.sin(a) * X + Math.cos(a) * Y + imageObj.height / 2;
+      return { x: win.left + (rx * win.w) / imageObj.width, y: win.top + (ry * win.h) / imageObj.height };
+    }
+
+    function sensorToShown(p, win) {
+      const a = (getRotation() * Math.PI) / 180;
+      const X = ((p.x - win.left) * imageObj.width) / win.w - imageObj.width / 2;
+      const Y = ((p.y - win.top) * imageObj.height) / win.h - imageObj.height / 2;
+      return { x: Math.cos(a) * X - Math.sin(a) * Y + imageObj.width / 2, y: Math.sin(a) * X + Math.cos(a) * Y + imageObj.height / 2 };
+    }
+
+    function boxCorners(box) {
+      return [{ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, { x: box.x0, y: box.y1 }, { x: box.x1, y: box.y1 }];
+    }
+
+    function boundingBox(points) {
+      const xs = points.map((p) => p.x);
+      const ys = points.map((p) => p.y);
+      return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+    }
+
+    // Zoom setting that makes the box (plus a small margin) fill the image
+    function zoomForBox(box) {
+      const sensor = getSensorSize();
+      const area = boundingBox(boxCorners(box).map((p) => shownToSensor(p, zoomWindow(getZoom()))));
+      const margin = 0.08 * Math.max(area.x1 - area.x0, area.y1 - area.y0);
+      const w = Math.max(area.x1 - area.x0 + 2 * margin, ((area.y1 - area.y0 + 2 * margin) * sensor.w) / sensor.h);
+      const maxFactor = Math.floor((sensor.w * 1000) / 640);
+      const factor = Math.min(Math.max(Math.floor((sensor.w * 1000) / w), 1000), maxFactor);
+      return { factor, x: Math.round((area.x0 + area.x1) / 2 - sensor.w / 2), y: Math.round((area.y0 + area.y1) / 2 - sensor.h / 2) };
+    }
+
+    function applyZoom(zoom) {
+      setCameraValue('takeimage_camera_zoomfactor_value', zoom.factor); // Also updates the offset limits
+      const win = zoomWindow(zoom);
+      const sensor = getSensorSize();
+      setCameraValue('takeimage_camera_zoomoffsetx_value', Math.round(win.left - (sensor.w - win.w) / 2));
+      setCameraValue('takeimage_camera_zoomoffsety_value', Math.round(win.top - (sensor.h - win.h) / 2));
+    }
+
+    function sameZoom(a, b) {
+      return a && b && a.factor == b.factor && a.x == b.x && a.y == b.y;
     }
 
     function loadRawImage() {
@@ -604,7 +1136,10 @@
 
       context.restore();
 
-      if (_grid) drawGrid();
+      if (_grid) {
+        drawGrid();
+        drawDigitBox();
+      }
     }
 
     function drawGrid() {
@@ -636,7 +1171,8 @@
       context.restore();
     }
 
-    function loadCanvas(dataURL, grid) {
+    // fromCapture: image of a capture (not the saved reference), may be analysed and awaited
+    function loadCanvas(dataURL, grid, fromCapture = false) {
       document.getElementById('canvas').style.display = 'none';
       document.getElementById('img_loading').style.display = 'block';
 
@@ -646,7 +1182,7 @@
 
         if (grid) {
           drawRotated(true);
-          document.getElementById('take').disabled = false;
+          document.getElementById('take').disabled = autoTuneRunning;
         } else {
           drawRotated(false);
         }
@@ -657,10 +1193,20 @@
 
         document.getElementById('canvas').style.display = 'block';
         document.getElementById('img_loading').style.display = 'none';
+
+        if (!fromCapture) return;
+
+        setAnalysisEnabled(true);
+        document.getElementById('savereference').disabled = autoTuneRunning;
+
+        if (imageWaiter) imageWaiter.resolve();
       };
 
       imageObj.onerror = function () {
         imageObj.onerror = null;
+        if (fromCapture && imageWaiter) imageWaiter.reject(new Error('Image could not be decoded'));
+        fromCapture = false; // The placeholder below must not be analysed
+
         canvas.removeEventListener('mousemove', mouseMove, false);
         imageObj.src = noImageAvailable;
       };
@@ -686,9 +1232,9 @@
       if (isActReference) drawRotated(false);
       else drawRotated(true);
 
-      let zw = getCoords(this);
-      let x = e.pageX - zw.left;
-      let y = e.pageY - zw.top;
+      const point = getCanvasPoint(e);
+      let x = point.x;
+      let y = point.y;
 
       context.lineWidth = 1;
       context.strokeStyle = 'rgb(160, 160, 160)';
@@ -698,6 +1244,25 @@
       context.moveTo(x, 0);
       context.lineTo(x, canvas.height);
       context.stroke();
+
+      if (boxStart) {
+        context.save();
+        context.strokeStyle = '#ffd400';
+        context.lineWidth = 2;
+        context.setLineDash([6, 4]);
+        context.strokeRect(boxStart.x, boxStart.y, x - boxStart.x, y - boxStart.y);
+        context.restore();
+      }
+
+      if (lineStart) {
+        context.strokeStyle = '#ff0000';
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(lineStart.x, lineStart.y);
+        context.lineTo(x, y);
+        context.stroke();
+        drawLineStart();
+      }
     }
 
     async function saveCanvasToFile(canvas, destFile) {
@@ -730,6 +1295,11 @@
     }
 
     function showReference() {
+      if (autoTuneRunning) return;
+
+      digitBox = null; // The saved reference is shown unrotated, a box drawn before does not fit
+      digitBoxZoomed = false;
+
       if (currentBlobUrl) {
         URL.revokeObjectURL(currentBlobUrl);
         currentBlobUrl = null;
@@ -742,6 +1312,8 @@
       document.getElementById('createreference').disabled = false;
       document.getElementById('showactualimage').disabled = true;
       document.getElementById('take').disabled = true;
+      setAnalysisEnabled(false);
+      document.getElementById('autotune').disabled = true;
 
       let jsonConfigKeyified = []; // Config: array as key-value pairs
       [jsonConfig, jsonConfigKeyified] = getConfigFromStorage(2); // Get config
@@ -768,6 +1340,17 @@
 
       const loader = document.getElementById('img_loading');
       if (loader) loader.src = loaderSpinner;
+
+      restoreTuneArea();
+      canvas.addEventListener('click', canvasClick, false);
+      document.addEventListener('keydown', (e) => {
+        if (e.key == 'Escape') {
+          cancelDrawLine();
+          cancelDrawBox();
+          if (!isActReference) drawRotated(true);
+        }
+      }, false);
+
       showReference();
 
       try {
